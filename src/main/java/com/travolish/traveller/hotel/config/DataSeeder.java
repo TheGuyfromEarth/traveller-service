@@ -25,9 +25,11 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         if (hotelRepository.count() == 0) {
-            var h1 = new Hotel(null, "Grand Plaza", "123 Main St", "Metropolis", 4.5, "+1-555-0100", "info@grandplaza.com", "A luxury downtown hotel", null);
-            var h2 = new Hotel(null, "Seaside Resort", "45 Ocean Ave", "Bay City", 4.2, "+1-555-0200", "hello@seasideresort.com", "Relaxing ocean views and pool", null);
-            var saved = hotelRepository.saveAll(List.of(h1, h2));
+            var h1 = new Hotel(null, "Grand Plaza", "123 Main St", "Metropolis", "USA", 4.5, "+1-555-0100", "info@grandplaza.com", "A luxury downtown hotel", null);
+            var h2 = new Hotel(null, "Seaside Resort", "45 Ocean Ave", "Bay City", "USA", 4.2, "+1-555-0200", "hello@seasideresort.com", "Relaxing ocean views and pool", null);
+            var h3 = new Hotel(null, "Eiffel Tower Hotel", "10 Rue de Rivoli", "Paris", "France", 4.7, "+33-1-5555-0100", "info@eiffeltower.com", "Iconic Paris hotel near Eiffel Tower", null);
+            var h4 = new Hotel(null, "Big Ben Hotel", "100 Westminster", "London", "UK", 4.4, "+44-20-5555-0100", "info@bigbenhotel.com", "Historic London accommodation", null);
+            var saved = hotelRepository.saveAll(List.of(h1, h2, h3, h4));
 
             Long h1Id = saved.get(0).getId();
             Long h2Id = saved.get(1).getId();

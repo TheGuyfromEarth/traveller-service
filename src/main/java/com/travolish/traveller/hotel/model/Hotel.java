@@ -25,6 +25,8 @@ public class Hotel {
 
     private String city;
 
+    private String country;
+
     private Double rating;
 
     private String phone;
