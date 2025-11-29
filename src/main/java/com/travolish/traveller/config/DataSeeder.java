@@ -3,9 +3,9 @@ package com.travolish.traveller.config;
 import java.util.List;
 
 import com.travolish.traveller.hotel.model.Hotel;
-import com.travolish.traveller.room.Room;
+import com.travolish.traveller.hotel.model.Room;
 import com.travolish.traveller.hotel.repository.HotelRepository;
-import com.travolish.traveller.room.RoomRepository;
+import com.travolish.traveller.hotel.repository.RoomRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -28,10 +28,10 @@ public class DataSeeder implements CommandLineRunner {
             hotelRepository.saveAll(List.of(h1, h2));
 
             // Seed rooms
-            var r1 = new Room(null, "101", "SINGLE", 79.0, true, h1);
+            /*var r1 = new Room(1, "101", "SINGLE", 79.0, true, h1);
             var r2 = new Room(null, "102", "DOUBLE", 119.0, true, h1);
             var r3 = new Room(null, "201", "SUITE", 299.0, true, h2);
-            roomRepository.saveAll(List.of(r1, r2, r3));
+            roomRepository.saveAll(List.of(r1, r2, r3));*/
 
             System.out.println("Seeded hotels and rooms");
         }

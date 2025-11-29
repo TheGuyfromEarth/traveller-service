@@ -1,4 +1,4 @@
-package com.travolish.traveller.room;
+package com.travolish.traveller.hotel.controller;
 
 import java.util.List;
 
@@ -6,6 +6,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import com.travolish.traveller.hotel.model.Room;
+import com.travolish.traveller.hotel.service.RoomService;
 
 @RestController
 @RequestMapping("/api/rooms")
@@ -18,15 +21,14 @@ public class RoomController {
     }
 
     @GetMapping
-    public List<Room> list() {
-        return roomService.findAll();
+    public List<Room> list(@RequestParam(value = "hotelId", required = false) Long hotelId) {
+        if (hotelId == null) return roomService.findAll();
+        return roomService.findByHotelId(hotelId);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Room> get(@PathVariable Long id) {
-        return roomService.findById(id)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return roomService.findById(id).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping
@@ -37,9 +39,7 @@ public class RoomController {
 
     @PutMapping("/{id}")
     public ResponseEntity<Room> update(@PathVariable Long id, @Validated @RequestBody Room room) {
-        return roomService.update(id, room)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return roomService.update(id, room).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
@@ -47,5 +47,4 @@ public class RoomController {
     public void delete(@PathVariable Long id) {
         roomService.delete(id);
     }
-
 }

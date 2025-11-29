@@ -1,9 +1,13 @@
-package com.travolish.traveller.room;
+package com.travolish.traveller.hotel.service.impl;
 
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+
+import com.travolish.traveller.hotel.model.Room;
+import com.travolish.traveller.hotel.repository.RoomRepository;
+import com.travolish.traveller.hotel.service.RoomService;
 
 @Service
 public class RoomServiceImpl implements RoomService {
@@ -17,6 +21,11 @@ public class RoomServiceImpl implements RoomService {
     @Override
     public List<Room> findAll() {
         return roomRepository.findAll();
+    }
+
+    @Override
+    public List<Room> findByHotelId(Long hotelId) {
+        return roomRepository.findByHotelId(hotelId);
     }
 
     @Override
@@ -37,7 +46,7 @@ public class RoomServiceImpl implements RoomService {
             existing.setType(room.getType());
             existing.setPricePerNight(room.getPricePerNight());
             existing.setAvailable(room.getAvailable());
-            existing.setHotel(room.getHotel());
+            existing.setHotelId(room.getHotelId());
             return roomRepository.save(existing);
         });
     }

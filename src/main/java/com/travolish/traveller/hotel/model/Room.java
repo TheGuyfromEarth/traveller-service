@@ -1,6 +1,7 @@
-package com.travolish.traveller.room;
+package com.travolish.traveller.hotel.model;
 
-import com.travolish.traveller.hotel.model.Hotel;
+import java.time.*;
+
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -17,14 +18,16 @@ public class Room {
 
     private String number;
 
-    private String type; // e.g., SINGLE, DOUBLE, SUITE
+    private String type; // SINGLE, DOUBLE, SUITE
 
     private Double pricePerNight;
 
     private Boolean available = true;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "hotel_id")
-    private Hotel hotel;
+    // store only the hotel's primary key
+    @Column(name = "hotel_id")
+    private Long hotelId;
+
+    private OffsetDateTime createdAt = OffsetDateTime.now();
 
 }
