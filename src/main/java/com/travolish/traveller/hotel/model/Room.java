@@ -1,9 +1,12 @@
 package com.travolish.traveller.hotel.model;
 
 import java.time.*;
+import java.util.List;
 
 import jakarta.persistence.*;
 import lombok.*;
+
+import com.travolish.traveller.review.model.Review;
 
 @Entity
 @Table(name = "rooms")
@@ -29,5 +32,10 @@ public class Room {
     private Long hotelId;
 
     private OffsetDateTime createdAt = OffsetDateTime.now();
+
+    @OneToMany(mappedBy = "roomId", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<Review> reviews;
 
 }

@@ -1,10 +1,13 @@
 package com.travolish.traveller.hotel.model;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
+
+import com.travolish.traveller.review.model.Review;
 
 @Entity
 @Table(name = "hotels")
@@ -37,5 +40,10 @@ public class Hotel {
     private String description;
 
     private OffsetDateTime createdAt = OffsetDateTime.now();
+
+    @OneToMany(mappedBy = "hotelId", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<Review> reviews;
 
 }

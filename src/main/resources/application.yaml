@@ -2,20 +2,98 @@ spring:
   application:
     name: traveller-service
   datasource:
-    # Default to an in-memory H2 database. Override with DB_URL to point to another DB if needed.
-    url: ${DB_URL:jdbc:h2:mem:travellerdb;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false}
-    username: ${DB_USER:sa}
-    password: ${DB_PASSWORD:}
-    driver-class-name: org.h2.Driver
+    # PostgreSQL database connection to Supabase
+    url: ${DB_URL:jdbc:postgresql://db.hizprgnbtsomiucqwull.supabase.co:5432/postgres?sslmode=require}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:#Orion2026*}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
   jpa:
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
   sql:
     init:
       mode: never
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:1011344852484-ptc8n4lcmig0k9tmnfsp6bumngeh3e2d.apps.googleusercontent.com}
+            client-secret: ${GOOGLE_CLIENT_SECRET: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}
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+            user-name-attribute: sub
+  s3:
+    bucket: ${S3_BUCKET:travolish-bucket}
+    region: ${AWS_REGION:us-east-1}
+
+# Apple OAuth configuration
+apple:
+  client-id: ${APPLE_CLIENT_ID:com.travolish.app}
+  team-id: ${APPLE_TEAM_ID:ABCD123456}
+  key-id: ${APPLE_KEY_ID:ABCD123456}
+  key-path: ${APPLE_KEY_PATH:/path/to/apple/key.p8}
+  bundle-id: ${APPLE_BUNDLE_ID:com.travolish}
+
+# Facebook OAuth configuration
+facebook:
+  app-id: ${FACEBOOK_APP_ID:}
+  app-secret: ${FACEBOOK_APP_SECRET:}
+  redirect-uri: https://api.travolish.com/api/auth/facebook/callback
+  
+  # Email configuration (SMTP)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+    from: ${MAIL_FROM:noreply@travolish.com}
+    from-name: ${MAIL_FROM_NAME:Travolish Hotels}
+  task:
+    scheduling:
+      pool:
+        size: 2
+      thread-name-prefix: notification-scheduler-
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
+
+# SMS configuration (for Twilio or similar providers)
+sms:
+  enabled: ${SMS_ENABLED:false}
+  provider: ${SMS_PROVIDER:mock} # Options: mock, twilio, aws-sns
+  twilio:
+    account-sid: ${TWILIO_ACCOUNT_SID:}
+    auth-token: ${TWILIO_AUTH_TOKEN:}
+    phone-number: ${TWILIO_PHONE_NUMBER:}
 
 # Springdoc (Swagger) UI will be available at /swagger-ui.html or /swagger-ui/index.html
 server:
@@ -24,3 +102,4 @@ server:
 logging:
   level:
     org.hibernate.SQL: DEBUG
+    com.travolish.traveller.notifications: DEBUG

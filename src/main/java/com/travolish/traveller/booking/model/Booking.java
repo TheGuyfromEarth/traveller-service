@@ -38,6 +38,15 @@ public class Booking {
     private LocalDate checkOutDate;
 
     @NotNull
+    private Double basePrice;
+
+    private Double seasonalAdjustment = 0.0;
+
+    private Double dynamicPricingAdjustment = 0.0;
+
+    private Double promotionalDiscount = 0.0;
+
+    @NotNull
     private Double totalPrice;
 
     @Enumerated(EnumType.STRING)
