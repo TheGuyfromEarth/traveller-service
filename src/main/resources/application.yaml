@@ -35,31 +35,39 @@ spring:
               - profile
               - email
             redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
+          facebook:
+            client-id: ${FACEBOOK_APP_ID:}
+            client-secret: ${FACEBOOK_APP_SECRET:}
+            scope:
+              - email
+              - public_profile
+            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
+          apple:
+            client-id: ${APPLE_CLIENT_ID:com.travolish.app}
+            client-secret: ${APPLE_CLIENT_SECRET:}
+            scope:
+              - openid
+              - email
+            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
         provider:
           google:
             authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
             token-uri: https://oauth2.googleapis.com/token
             user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
             user-name-attribute: sub
+          facebook:
+            authorization-uri: https://www.facebook.com/v18.0/oauth/authorize
+            token-uri: https://graph.facebook.com/v18.0/oauth/access_token
+            user-info-uri: https://graph.facebook.com/v18.0/me?fields=id,first_name,last_name,email,picture.type(large)
+            user-name-attribute: id
+          apple:
+            authorization-uri: https://appleid.apple.com/auth/authorize
+            token-uri: https://appleid.apple.com/auth/token
+            user-info-uri: https://api.appleid.apple.com/auth/access_token
+            user-name-attribute: sub
   s3:
     bucket: ${S3_BUCKET:travolish-bucket}
     region: ${AWS_REGION:us-east-1}
-
-# Apple OAuth configuration
-apple:
-  client-id: ${APPLE_CLIENT_ID:com.travolish.app}
-  team-id: ${APPLE_TEAM_ID:ABCD123456}
-  key-id: ${APPLE_KEY_ID:ABCD123456}
-  key-path: ${APPLE_KEY_PATH:/path/to/apple/key.p8}
-  bundle-id: ${APPLE_BUNDLE_ID:com.travolish}
-
-# Facebook OAuth configuration
-facebook:
-  app-id: ${FACEBOOK_APP_ID:}
-  app-secret: ${FACEBOOK_APP_SECRET:}
-  redirect-uri: https://api.travolish.com/api/auth/facebook/callback
-  
-  # Email configuration (SMTP)
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -86,6 +94,20 @@ facebook:
         await-termination: true
         await-termination-period: 30s
 
+# Supabase Storage configuration (replaces S3)
+supabase:
+  url: ${SUPABASE_URL:https://hizprgnbtsomiucqwull.supabase.co}
+  api-key: ${SUPABASE_API_KEY:your-anon-key}
+  bucket-name: ${SUPABASE_BUCKET_NAME:travolish-bucket}
+
+# Apple OAuth configuration (custom implementation)
+apple:
+  client-id: ${APPLE_CLIENT_ID:com.travolish.app}
+  team-id: ${APPLE_TEAM_ID:ABCD123456}
+  key-id: ${APPLE_KEY_ID:ABCD123456}
+  key-path: ${APPLE_KEY_PATH:/path/to/apple/key.p8}
+  bundle-id: ${APPLE_BUNDLE_ID:com.travolish}
+
 # SMS configuration (for Twilio or similar providers)
 sms:
   enabled: ${SMS_ENABLED:false}
@@ -102,4 +124,4 @@ server:
 logging:
   level:
     org.hibernate.SQL: DEBUG
-    com.travolish.traveller.notifications: DEBUG
+    com.travolish.traveller.notifications: INFO
