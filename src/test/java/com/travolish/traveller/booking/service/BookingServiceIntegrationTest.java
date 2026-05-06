@@ -34,8 +34,10 @@ public class BookingServiceIntegrationTest {
     private static final Long TEST_HOTEL_ID = 1L;
     private static final Long TEST_ROOM_ID = 1L;
     private static final Double BASE_PRICE = 100.0;
-    private static final LocalDate TEST_CHECK_IN = LocalDate.of(2025, 12, 1);
-    private static final LocalDate TEST_CHECK_OUT = LocalDate.of(2025, 12, 5);
+
+    // Use future dates so initializeRoomAvailability (30 days ahead) covers them
+    private static final LocalDate TEST_CHECK_IN = LocalDate.now().plusDays(5);
+    private static final LocalDate TEST_CHECK_OUT = LocalDate.now().plusDays(9); // 4 nights
 
     @BeforeEach
     void setup() {
@@ -62,11 +64,11 @@ public class BookingServiceIntegrationTest {
         // Then
         assertNotNull(priceDTO);
         assertEquals(BASE_PRICE, priceDTO.getBasePrice());
-        assertEquals(4, priceDTO.getNumberOfNights()); // Dec 1-5 = 4 nights
+        assertEquals(4, priceDTO.getNumberOfNights()); // 4 nights
         assertEquals(400.0, priceDTO.getBasePriceTotal()); // 100 * 4
         assertNotNull(priceDTO.getTotalPrice());
         assertTrue(priceDTO.getTotalPrice() > 0);
-        
+
         // Print the summary
         System.out.println("Price Summary: " + priceDTO.getPriceSummary());
     }
@@ -100,21 +102,11 @@ public class BookingServiceIntegrationTest {
     @Test
     @DisplayName("Should throw exception when room not available")
     void testCreateBookingWhenRoomNotAvailable() {
-        // Given - Create a booking that takes up all availability
-        Booking firstBooking = new Booking();
-        firstBooking.setRoomId(TEST_ROOM_ID);
-        firstBooking.setHotelId(TEST_HOTEL_ID);
-        firstBooking.setGuestName("Guest 1");
-        firstBooking.setCheckInDate(TEST_CHECK_IN);
-        firstBooking.setCheckOutDate(TEST_CHECK_OUT);
-        firstBooking.setBasePrice(BASE_PRICE);
-
-        // Block rooms for the test period
-        LocalDate maintenanceDate = TEST_CHECK_IN;
+        // Block all rooms on the check-in date so the range is unavailable
         availabilityService.blockRoomsForMaintenance(
             TEST_ROOM_ID,
-            maintenanceDate,
-            5,  // 5 rooms
+            TEST_CHECK_IN,
+            5,  // block all 5 rooms
             "Maintenance"
         );
 
@@ -166,9 +158,9 @@ public class BookingServiceIntegrationTest {
     @Test
     @DisplayName("Should find bookings by room ID")
     void testFindByRoomId() {
-        // Given - Create multiple bookings for the same room
-        Booking booking1 = createTestBooking("Guest 1", LocalDate.of(2025, 12, 1), LocalDate.of(2025, 12, 3));
-        Booking booking2 = createTestBooking("Guest 2", LocalDate.of(2025, 12, 10), LocalDate.of(2025, 12, 12));
+        // Given - Create multiple bookings for the same room on non-overlapping dates
+        Booking booking1 = createTestBooking("Guest 1", LocalDate.now().plusDays(5), LocalDate.now().plusDays(7));
+        Booking booking2 = createTestBooking("Guest 2", LocalDate.now().plusDays(15), LocalDate.now().plusDays(17));
 
         bookingService.create(booking1);
         bookingService.create(booking2);
@@ -199,12 +191,8 @@ public class BookingServiceIntegrationTest {
     @Test
     @DisplayName("Should check availability correctly")
     void testCheckAvailability() {
-        // Given
-        LocalDate checkIn = LocalDate.of(2025, 12, 1);
-        LocalDate checkOut = LocalDate.of(2025, 12, 5);
-
         // When
-        Boolean isAvailable = bookingService.checkAvailability(TEST_ROOM_ID, checkIn, checkOut);
+        Boolean isAvailable = bookingService.checkAvailability(TEST_ROOM_ID, TEST_CHECK_IN, TEST_CHECK_OUT);
 
         // Then
         assertTrue(isAvailable);
@@ -213,23 +201,22 @@ public class BookingServiceIntegrationTest {
     @Test
     @DisplayName("Should prevent double booking")
     void testPreventDoubleBooking() {
-        // Given - Create first booking
+        // Given - Create first booking (uses 1 of 5 rooms per night)
         Booking firstBooking = createTestBooking("Guest 1", TEST_CHECK_IN, TEST_CHECK_OUT);
         Booking createdFirstBooking = bookingService.create(firstBooking);
         assertNotNull(createdFirstBooking.getId());
 
-        // Initialize availability with just 1 room
-        availabilityService.initializeRoomAvailability(
-            TEST_HOTEL_ID,
-            TEST_ROOM_ID,
-            1,  // Only 1 room
-            30
-        );
+        // Block remaining 4 rooms for all nights in the range so 0 rooms are available
+        LocalDate date = TEST_CHECK_IN;
+        while (date.isBefore(TEST_CHECK_OUT)) {
+            availabilityService.blockRoomsForMaintenance(TEST_ROOM_ID, date, 4, "Test - fill capacity");
+            date = date.plusDays(1);
+        }
 
-        // When - Try to book overlapping dates with only 1 room
+        // When - Try to book the same overlapping dates (0 rooms left)
         Booking secondBooking = createTestBooking("Guest 2", TEST_CHECK_IN, TEST_CHECK_OUT);
 
-        // Then - Should throw exception (room fully booked)
+        // Then - Should throw exception (no rooms available)
         assertThrows(InsufficientAvailabilityException.class,
             () -> bookingService.create(secondBooking));
     }
@@ -238,9 +225,9 @@ public class BookingServiceIntegrationTest {
     @DisplayName("Should handle partial date range bookings")
     void testPartialDateRangeBooking() {
         // Given - Book part of the range
-        LocalDate checkIn = LocalDate.of(2025, 12, 2);
-        LocalDate checkOut = LocalDate.of(2025, 12, 4);
-        
+        LocalDate checkIn = LocalDate.now().plusDays(6);
+        LocalDate checkOut = LocalDate.now().plusDays(8);
+
         Booking booking = createTestBooking("Guest 1", checkIn, checkOut);
 
         // When
@@ -280,24 +267,24 @@ public class BookingServiceIntegrationTest {
     @Test
     @DisplayName("Should calculate prices for different night counts")
     void testPriceCalculationForMultipleNights() {
-        // Test different date ranges
+        // Test different date ranges (price calculation does not require availability records)
         testPriceForDateRange(
-            LocalDate.of(2025, 12, 1),
-            LocalDate.of(2025, 12, 2),
+            LocalDate.now().plusDays(5),
+            LocalDate.now().plusDays(6),
             1,
             "1 night"
         );
 
         testPriceForDateRange(
-            LocalDate.of(2025, 12, 1),
-            LocalDate.of(2025, 12, 4),
+            LocalDate.now().plusDays(5),
+            LocalDate.now().plusDays(8),
             3,
             "3 nights"
         );
 
         testPriceForDateRange(
-            LocalDate.of(2025, 12, 1),
-            LocalDate.of(2025, 12, 8),
+            LocalDate.now().plusDays(5),
+            LocalDate.now().plusDays(12),
             7,
             "1 week"
         );
