@@ -1,10 +1,9 @@
 package com.travolish.traveller.user.service;
 
 import java.io.InputStream;
+import java.net.URI;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Base64;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -115,7 +114,7 @@ public class SupabaseStorageService {
             // For now, return the public URL if the bucket is public
             // For private access, implement custom authorization with row-level security
             String url = getPublicUrl(path);
-            return new URL(url);
+            return URI.create(url).toURL();
         } catch (Exception e) {
             log.error("Error generating presigned URL for: {}", path, e);
             throw new RuntimeException("Error generating presigned URL", e);

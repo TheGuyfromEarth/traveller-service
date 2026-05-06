@@ -3,7 +3,6 @@ package com.travolish.traveller.booking.service;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,11 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.travolish.traveller.booking.dto.BookingPriceDTO;
 import com.travolish.traveller.booking.model.Booking;
-import com.travolish.traveller.booking.repository.BookingRepository;
-import com.travolish.traveller.inventory.model.RoomAvailability;
-import com.travolish.traveller.inventory.repository.RoomAvailabilityRepository;
 import com.travolish.traveller.inventory.exception.InsufficientAvailabilityException;
-import com.travolish.traveller.inventory.exception.OverbookingException;
 import com.travolish.traveller.inventory.service.AvailabilityService;
 
 /**

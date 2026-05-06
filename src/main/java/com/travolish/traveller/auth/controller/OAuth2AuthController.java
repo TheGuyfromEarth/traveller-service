@@ -2,9 +2,11 @@ package com.travolish.traveller.auth.controller;
 
 import com.travolish.traveller.auth.dto.AppleOAuth2Request;
 import com.travolish.traveller.auth.dto.FacebookOAuth2Request;
+import com.travolish.traveller.auth.dto.GoogleOAuth2Request;
 import com.travolish.traveller.auth.dto.OAuth2AuthResponse;
 import com.travolish.traveller.auth.service.AppleOAuth2Service;
 import com.travolish.traveller.auth.service.FacebookOAuth2Service;
+import com.travolish.traveller.auth.service.GoogleOAuth2Service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -24,6 +26,9 @@ public class OAuth2AuthController {
 
     @Autowired
     private FacebookOAuth2Service facebookOAuth2Service;
+
+    @Autowired
+    private GoogleOAuth2Service googleOAuth2Service;
 
     /**
      * Apple OAuth2 Callback
@@ -104,6 +109,44 @@ public class OAuth2AuthController {
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorResponse("Facebook authentication failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Google OAuth2 Callback
+     * POST /api/auth/google/callback
+     * 
+     * Handles Google authentication callback
+     * 
+     * @param request GoogleOAuth2Request containing ID token
+     * @return OAuth2AuthResponse with JWT token and user info
+     */
+    @PostMapping("/google/callback")
+    public ResponseEntity<?> googleCallback(@Valid @RequestBody GoogleOAuth2Request request) {
+        log.info("Received Google OAuth2 callback request");
+        try {
+            if (request.getIdToken() == null || request.getIdToken().isEmpty()) {
+                return ResponseEntity
+                        .badRequest()
+                        .body(new ErrorResponse("ID token is required"));
+            }
+
+            OAuth2AuthResponse response = googleOAuth2Service.handleGoogleCallback(request);
+            log.info("Google authentication successful for user: {}", response.getUserId());
+            
+            return ResponseEntity
+                    .ok()
+                    .body(response);
+        } catch (SecurityException e) {
+            log.warn("Google authentication security error: {}", e.getMessage());
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(new ErrorResponse("Authentication failed: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error processing Google OAuth2 callback", e);
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Google authentication failed: " + e.getMessage()));
         }
     }
 
@@ -219,6 +262,32 @@ public class OAuth2AuthController {
                     .body(new ValidationResponse(isValid));
         } catch (Exception e) {
             log.error("Error validating Facebook access token", e);
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Validation failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Validate Google ID Token
+     * POST /api/auth/google/validate
+     * 
+     * Validates a Google ID token without creating a session
+     * 
+     * @param idToken Google ID token to validate
+     * @return validation result
+     */
+    @PostMapping("/google/validate")
+    public ResponseEntity<?> validateGoogleToken(@RequestParam String idToken) {
+        log.info("Validating Google ID token");
+        try {
+            boolean isValid = googleOAuth2Service.validateIdToken(idToken);
+            
+            return ResponseEntity
+                    .ok()
+                    .body(new ValidationResponse(isValid));
+        } catch (Exception e) {
+            log.error("Error validating Google ID token", e);
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorResponse("Validation failed: " + e.getMessage()));

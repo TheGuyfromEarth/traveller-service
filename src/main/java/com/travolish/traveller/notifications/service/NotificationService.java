@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,8 +34,6 @@ public class NotificationService {
     private final EmailService emailService;
     private final SmsService smsService;
     private final ModelMapper modelMapper;
-    
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@(.+)$");
     
     public NotificationService(
             NotificationRepository notificationRepository,

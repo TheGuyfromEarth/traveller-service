@@ -36,37 +36,48 @@ public class DemandMetrics {
     @Min(0)
     @Max(100)
     @Column(nullable = false)
+    @Builder.Default
     private Double occupancyRate = 0.0; // Percentage
 
     @Min(0)
+    @Builder.Default
     private Integer bookingsCount = 0;
 
     @Min(0)
+    @Builder.Default
     private Integer cancelledCount = 0;
 
     @Min(0)
+    @Builder.Default
     private Integer viewCount = 0;
 
     @Min(0)
+    @Builder.Default
     private Integer inquiryCount = 0;
 
     @Min(0)
+    @Builder.Default
     private Double averageBookingValue = 0.0;
 
     @Min(0)
+    @Builder.Default
     private Integer daysSinceLastBooking = 0; // Null = never booked
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private DemandLevel demandLevel = DemandLevel.LOW; // LOW, MEDIUM, HIGH, VERY_HIGH
 
     @DecimalMin("0.5")
+    @Builder.Default
     private Double priceMultiplier = 1.0; // Dynamic pricing adjustment (0.5 = 50% off, 2.0 = double)
 
     private String notes;
 
+    @Builder.Default
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
+    @Builder.Default
     private OffsetDateTime updatedAt = OffsetDateTime.now();
 
     public enum DemandLevel {

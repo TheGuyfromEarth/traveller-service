@@ -49,6 +49,7 @@ public class PricingRule {
     @Min(0)
     private Double adjustedPrice; // Final calculated price
 
+    @Builder.Default
     private Double multiplier = 1.0; // For percentage-based adjustments
 
     @Min(0)
@@ -56,9 +57,11 @@ public class PricingRule {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private RuleType ruleType = RuleType.SEASONAL; // SEASONAL, PROMOTIONAL, DYNAMIC, EARLY_BIRD
 
     @Column(nullable = false)
+    @Builder.Default
     private Integer priority = 1; // Higher priority applied first (1=highest)
 
     private String description;
@@ -66,10 +69,13 @@ public class PricingRule {
     private String season; // e.g., "SUMMER", "WINTER", "HOLIDAY"
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean isActive = true;
 
+    @Builder.Default
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
+    @Builder.Default
     private OffsetDateTime updatedAt = OffsetDateTime.now();
 
     public enum PricingType {

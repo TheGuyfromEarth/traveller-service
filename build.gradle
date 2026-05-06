@@ -73,3 +73,6 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+springBoot {
+	mainClass = 'com.travolish.traveller.TravellerServiceApplication'
+}

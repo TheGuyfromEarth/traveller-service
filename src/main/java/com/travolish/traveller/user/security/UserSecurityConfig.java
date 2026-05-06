@@ -21,6 +21,9 @@ public class UserSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/users/**").permitAll()
                         .requestMatchers("/login/**", "/oauth2/**").permitAll()
+                        // Protect host/admin APIs - require authentication
+//                        .requestMatchers("/api/host/**").authenticated()
+//                        .requestMatchers("/api/admin/**").authenticated()
                         .anyRequest().permitAll()
                 )
                 .oauth2Login(oauth2 -> oauth2

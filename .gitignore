@@ -35,3 +35,10 @@ out/
 
 ### VS Code ###
 .vscode/
+
+*.txt
+*.md
+*.sh
+*.bat
+*.json
+*.csv

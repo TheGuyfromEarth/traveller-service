@@ -41,14 +41,10 @@ public class AnalyticsService {
         LocalDate today = LocalDate.now();
         LocalDate thirtyDaysAgo = today.minusDays(30);
         LocalDate startOfMonth = today.withDayOfMonth(1);
-        LocalDate startOfLastMonth = startOfMonth.minusMonths(1);
         
         // Get current month analytics
         List<HostAnalytics> monthAnalytics = hostAnalyticsRepository
             .findByHostIdAndDateRange(hostId, startOfMonth, today);
-        
-        List<HostAnalytics> lastMonthAnalytics = hostAnalyticsRepository
-            .findByHostIdAndDateRange(hostId, startOfLastMonth, startOfMonth.minusDays(1));
         
         // Calculate summary stats
         BigDecimal totalEarnings = hostEarningsRepository.getTotalPaidEarnings(hostId);
@@ -268,7 +264,6 @@ public class AnalyticsService {
             
             // Calculate star distribution (estimate)
             if (latest.getTotalReviews() > 0) {
-                int fiveStarPercentage = (latest.getFiveStarReviews() * 100) / latest.getTotalReviews();
                 analytics.setFiveStarCount(latest.getFiveStarReviews());
                 analytics.setFourStarCount((int) (latest.getTotalReviews() * 0.15));
                 analytics.setThreeStarCount((int) (latest.getTotalReviews() * 0.10));
@@ -305,7 +300,7 @@ public class AnalyticsService {
                 
                 Double totalSpent = bookings.stream()
                     .map(b -> b.getNetEarnings().doubleValue())
-                    .reduce(0.0, Double::sum);
+                    .reduce(0.0, (a, b) -> a + b);
                 guest.setTotalSpent(totalSpent);
                 
                 if (!bookings.isEmpty()) {

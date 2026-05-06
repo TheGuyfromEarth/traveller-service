@@ -101,8 +101,7 @@ public class InventoryController {
         
         LocalDate start = startDate != null ? startDate : LocalDate.now();
         LocalDate end = endDate != null ? endDate : LocalDate.now().plusDays(30);
-        
-        List<Object> forecast = (List<Object>) (List<?>) inventoryManagementService
+                @SuppressWarnings("unchecked")        List<Object> forecast = (List<Object>) (List<?>) inventoryManagementService
             .getInventoryForecast(hotelId, start, end);
         return ResponseEntity.ok(forecast);
     }
@@ -167,6 +166,7 @@ public class InventoryController {
         LocalDate start = startDate != null ? startDate : LocalDate.now();
         LocalDate end = endDate != null ? endDate : LocalDate.now().plusDays(30);
         
+        @SuppressWarnings("unchecked")
         List<Object> recommendations = (List<Object>) (List<?>) inventoryManagementService
             .getPricingRecommendations(hotelId, start, end);
         return ResponseEntity.ok(recommendations);
@@ -177,6 +177,7 @@ public class InventoryController {
      */
     @GetMapping("/alerts/{hotelId}")
     public ResponseEntity<List<Object>> getAvailabilityAlerts(@PathVariable Long hotelId) {
+        @SuppressWarnings("unchecked")
         List<Object> alerts = (List<Object>) (List<?>) inventoryManagementService.getAvailabilityAlerts(hotelId);
         return ResponseEntity.ok(alerts);
     }

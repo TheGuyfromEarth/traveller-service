@@ -32,7 +32,6 @@ public class KYCService {
     private static final double MICRO_DEPOSIT_MIN = 0.01;
     private static final double MICRO_DEPOSIT_MAX = 0.99;
     private static final int MICRO_DEPOSIT_VALIDITY_DAYS = 10;
-    private static final double AI_CONFIDENCE_THRESHOLD = 0.85;
     
     /**
      * Submit initial KYC information for a host
@@ -80,6 +79,52 @@ public class KYCService {
         
         hostKYC = hostKYCRepository.save(hostKYC);
         log.info("KYC submitted successfully for host: {} with ID: {}", hostId, hostKYC.getId());
+        
+        return modelMapper.map(hostKYC, HostKYCDTO.class);
+    }
+    
+    /**
+     * Submit KYC information temporarily without requiring authentication
+     * This method saves KYC data with a temporary status, to be linked to a user after they sign in
+     */
+    @Transactional
+    public HostKYCDTO submitKYCTemporary(SubmitKYCRequest request) {
+        log.info("Submitting temporary KYC without authentication");
+        
+        HostKYC hostKYC = new HostKYC();
+        // Set hostId as null or 0 to indicate this is a temporary KYC pending authentication
+        hostKYC.setHostId(10L);
+        hostKYC.setFirstName(request.getFirstName());
+        hostKYC.setLastName(request.getLastName());
+        hostKYC.setDateOfBirth(request.getDateOfBirth());
+        hostKYC.setNationality(request.getNationality());
+        hostKYC.setNationalIdNumber(request.getNationalIdNumber());
+        
+        // Address information
+        hostKYC.setAddressLine1(request.getAddressLine1());
+        hostKYC.setAddressLine2(request.getAddressLine2());
+        hostKYC.setCity(request.getCity());
+        hostKYC.setStateProvince(request.getStateProvince());
+        hostKYC.setPostalCode(request.getPostalCode());
+        hostKYC.setCountry(request.getCountry());
+        
+        // Business information
+        hostKYC.setBusinessName(request.getBusinessName());
+        hostKYC.setBusinessType(request.getBusinessType());
+        hostKYC.setBusinessRegistrationNumber(request.getBusinessRegistrationNumber());
+        hostKYC.setTaxId(request.getTaxId());
+        
+        // Set initial status - mark as TEMPORARY_SUBMITTED to indicate pending authentication
+        hostKYC.setKycStatus("TEMPORARY_SUBMITTED");
+        hostKYC.setVerificationLevel("LEVEL_0");
+        hostKYC.setCreatedAt(LocalDateTime.now());
+        hostKYC.setUpdatedAt(LocalDateTime.now());
+        
+        // Assess initial risk based on provided information
+        assessRisk(hostKYC);
+        
+        hostKYC = hostKYCRepository.save(hostKYC);
+        log.info("Temporary KYC submitted successfully with ID: {}", hostKYC.getId());
         
         return modelMapper.map(hostKYC, HostKYCDTO.class);
     }

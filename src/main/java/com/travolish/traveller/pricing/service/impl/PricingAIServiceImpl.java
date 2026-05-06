@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,8 +24,6 @@ import java.util.stream.Collectors;
 public class PricingAIServiceImpl implements PricingAIService {
 
     private final PricingSuggestionRepository pricingSuggestionRepository;
-    private static final double HIGH_CONFIDENCE_THRESHOLD = 0.75;
-    private static final double MEDIUM_CONFIDENCE_THRESHOLD = 0.5;
 
     @Override
     public PricingSuggestionDTO generateSuggestion(PricingSuggestionRequest request) {

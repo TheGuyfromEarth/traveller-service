@@ -30,21 +30,24 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID:1011344852484-ptc8n4lcmig0k9tmnfsp6bumngeh3e2d.apps.googleusercontent.com}
             client-secret: ${GOOGLE_CLIENT_SECRET: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}
+            authorization-grant-type: authorization_code
             scope:
               - openid
               - profile
               - email
             redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
           facebook:
-            client-id: ${FACEBOOK_APP_ID:}
-            client-secret: ${FACEBOOK_APP_SECRET:}
+            client-id: ${FACEBOOK_APP_ID:lorem}
+            client-secret: ${FACEBOOK_APP_SECRET:lorem}
+            authorization-grant-type: authorization_code
             scope:
               - email
               - public_profile
             redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
           apple:
             client-id: ${APPLE_CLIENT_ID:com.travolish.app}
-            client-secret: ${APPLE_CLIENT_SECRET:}
+            client-secret: ${APPLE_CLIENT_SECRET:lorem}
+            authorization-grant-type: authorization_code
             scope:
               - openid
               - email
@@ -99,6 +102,11 @@ supabase:
   url: ${SUPABASE_URL:https://hizprgnbtsomiucqwull.supabase.co}
   api-key: ${SUPABASE_API_KEY:your-anon-key}
   bucket-name: ${SUPABASE_BUCKET_NAME:travolish-bucket}
+
+# Google OAuth2 configuration
+google:
+  oauth2:
+    verify-signature: ${GOOGLE_VERIFY_SIGNATURE:false}  # Set to false for dev/testing, true for production
 
 # Apple OAuth configuration (custom implementation)
 apple:
