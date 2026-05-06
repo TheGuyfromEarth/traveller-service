@@ -37,7 +37,6 @@ jobs:
           image: theguyfromearth/image          # lowercase!
           tags: v1, latest
           registry: ghcr.io
-          dockerfile: Dockerfile.ci
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
