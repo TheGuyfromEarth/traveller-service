@@ -22,7 +22,6 @@ import java.util.List;
 public class DescriptionGeneratorController {
 
     private final DescriptionGeneratorService descriptionGeneratorService;
-
     /**
      * Generate AI description
      * POST /api/ai/descriptions/generate
