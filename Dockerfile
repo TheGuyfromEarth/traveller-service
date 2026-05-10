@@ -35,7 +35,6 @@ ENTRYPOINT ["sh", "-c", "exec java \
   -XX:MaxRAMPercentage=75.0 \
   -XX:+UseSerialGC \
   -XX:TieredStopAtLevel=1 \
-  -Dspring.main.lazy-initialization=true \
   -Dspring.jmx.enabled=false \
   -Dserver.port=${PORT:-8080} \
   -Djava.security.egd=file:/dev/./urandom \
