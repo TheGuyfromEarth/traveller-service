@@ -42,6 +42,12 @@ public class UserService {
         return convertToDTO(user);
     }
 
+    public UserDTO getUserByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+        return convertToDTO(user);
+    }
+
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::convertToDTO)
@@ -54,8 +60,13 @@ public class UserService {
 
         existingUser.setFirstName(userDTO.getFirstName());
         existingUser.setLastName(userDTO.getLastName());
+        existingUser.setPreferredName(userDTO.getPreferredName());
         existingUser.setEmail(userDTO.getEmail());
         existingUser.setPhone(userDTO.getPhone());
+        existingUser.setCity(userDTO.getCity());
+        existingUser.setTimeZone(userDTO.getTimeZone());
+        existingUser.setTravelStyle(userDTO.getTravelStyle());
+        existingUser.setBio(userDTO.getBio());
         // Don't update password here, create a separate endpoint for password update
 
         User updatedUser = userRepository.save(existingUser);
@@ -74,8 +85,13 @@ public class UserService {
                 .id(user.getId())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
+                .preferredName(user.getPreferredName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
+                .city(user.getCity())
+                .timeZone(user.getTimeZone())
+                .travelStyle(user.getTravelStyle())
+                .bio(user.getBio())
                 .provider(user.getProvider())
                 .providerId(user.getProviderId())
                 .imageKey(user.getImageKey())

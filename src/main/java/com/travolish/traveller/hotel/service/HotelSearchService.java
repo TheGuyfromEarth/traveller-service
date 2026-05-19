@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.travolish.traveller.hotel.dto.HotelSearchRequest;
 import com.travolish.traveller.hotel.dto.HotelSearchResponse;
@@ -25,6 +26,7 @@ public class HotelSearchService {
         this.hotelRepository = hotelRepository;
     }
 
+    @Transactional(readOnly = true)
     public Page<HotelSearchResponse> searchHotels(HotelSearchRequest searchRequest) {
         Specification<Hotel> spec = buildSpecification(searchRequest);
         Pageable pageable = PageRequest.of(searchRequest.getPageNumber(), searchRequest.getPageSize());
@@ -54,6 +56,7 @@ public class HotelSearchService {
                 .city(hotel.getCity())
                 .country(hotel.getCountry())
                 .rating(hotel.getRating())
+                .reviewCount(hotel.getReviews() != null ? hotel.getReviews().size() : 0)
                 .phone(hotel.getPhone())
                 .email(hotel.getEmail())
                 .description(hotel.getDescription())

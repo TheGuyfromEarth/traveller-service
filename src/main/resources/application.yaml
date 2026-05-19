@@ -100,7 +100,7 @@ spring:
 # Supabase Storage configuration (replaces S3)
 supabase:
   url: ${SUPABASE_URL:https://hizprgnbtsomiucqwull.supabase.co}
-  api-key: ${SUPABASE_API_KEY:your-anon-key}
+  api-key: ${SUPABASE_API_KEY:sb_secret_WPBZQfTWhnTSBDgAO-uxQQ_2NUf4yuD}
   bucket-name: ${SUPABASE_BUCKET_NAME:travolish-bucket}
 
 # Google OAuth2 configuration
@@ -128,6 +128,10 @@ sms:
 # Springdoc (Swagger) UI will be available at /swagger-ui.html or /swagger-ui/index.html
 server:
   port: 8080
+  error:
+    include-message: always
+    include-exception: true
+    include-stacktrace: on_param
 
 logging:
   level:

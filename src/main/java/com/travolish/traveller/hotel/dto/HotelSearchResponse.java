@@ -19,6 +19,7 @@ public class HotelSearchResponse {
     private String city;
     private String country;
     private Double rating;
+    private Integer reviewCount;
     private String phone;
     private String email;
     private String description;

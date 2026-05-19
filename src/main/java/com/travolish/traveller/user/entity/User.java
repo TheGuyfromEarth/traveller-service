@@ -1,5 +1,6 @@
 package com.travolish.traveller.user.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -24,9 +25,15 @@ public class User {
     
     private String firstName;
     private String lastName;
+    private String preferredName;
     private String email;
     private String password;
     private String phone;
+    private String city;
+    private String timeZone;
+    private String travelStyle;
+    @Column(columnDefinition = "TEXT")
+    private String bio;
     // OAuth2 provider name (google, github, etc.)
     private String provider;
     // Provider-specific id (sub for Google)

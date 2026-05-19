@@ -35,10 +35,12 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
 
         ListingDescription description = ListingDescription.builder()
                 .hotelId(request.getHotelId())
-                .roomId(request.getRoomId())
+                .roomId(request.getRoomId() != null ? request.getRoomId() : 0L)
                 .sourceLanguage(request.getSourceLanguage())
                 .targetLanguage(request.getTargetLanguage())
-//                .descriptionType(request.getDescriptionType())
+                .descriptionType(request.getDescriptionType() != null
+                        ? ListingDescription.DescriptionType.valueOf(request.getDescriptionType())
+                        : ListingDescription.DescriptionType.ROOM_DESCRIPTION)
                 .originalDescription(request.getOriginalDescription())
                 .generatedDescription(generatedDescription)
                 .qualityScore(qualityScore)
@@ -173,7 +175,7 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
                 .roomId(description.getRoomId())
                 .sourceLanguage(description.getSourceLanguage())
                 .targetLanguage(description.getTargetLanguage())
-                .descriptionType(description.getDescriptionType().toString())
+                .descriptionType(description.getDescriptionType() != null ? description.getDescriptionType().toString() : null)
                 .originalDescription(description.getOriginalDescription())
                 .generatedDescription(description.getGeneratedDescription())
                 .qualityScore(description.getQualityScore())

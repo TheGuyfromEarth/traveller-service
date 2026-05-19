@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.travolish.traveller.user.dto.UserDTO;
@@ -28,6 +29,11 @@ public class UserController {
     @PostMapping
     public ResponseEntity<UserDTO> createUser(@RequestBody UserDTO userDTO) {
         return new ResponseEntity<>(userService.createUser(userDTO), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/by-email")
+    public ResponseEntity<UserDTO> getUserByEmail(@RequestParam String email) {
+        return ResponseEntity.ok(userService.getUserByEmail(email));
     }
 
     @GetMapping("/{id}")

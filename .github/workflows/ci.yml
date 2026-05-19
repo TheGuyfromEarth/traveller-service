@@ -38,16 +38,6 @@ jobs:
       - name: Build with Gradle Wrapper
         run: ./gradlew build
 
-      # ----- Optional: keep pushing to GHCR for backup/visibility -----
-      - name: Build & push Docker image to GHCR
-        uses: mr-smithers-excellent/docker-build-push@v6
-        with:
-          image: theguyfromearth/image
-          tags: v1, latest
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       # ----- New: Google Cloud authentication -----
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -89,7 +79,8 @@ jobs:
             --timeout=60 \
             --port=8080 \
             --allow-unauthenticated \
-            --cpu-boost
+            --cpu-boost \
+            --set-env-vars="DB_URL=${{ secrets.DB_URL }},DB_USER=${{ secrets.DB_USER }},DB_PASSWORD=${{ secrets.DB_PASSWORD }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY }},SUPABASE_BUCKET_NAME=${{ secrets.SUPABASE_BUCKET_NAME }}"
 
       - name: Show Cloud Run service URL
         run: |

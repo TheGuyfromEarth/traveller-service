@@ -35,10 +35,10 @@ public class ListingDescription {
     @Column(nullable = false)
     private DescriptionType descriptionType;
 
-    @Column(columnDefinition = "LONGTEXT", nullable = false)
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String originalDescription;
 
-    @Column(columnDefinition = "LONGTEXT", nullable = false)
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String generatedDescription;
 
     @Column(nullable = false)
