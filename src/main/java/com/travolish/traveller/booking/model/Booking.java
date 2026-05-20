@@ -60,7 +60,7 @@ public class Booking {
     private OffsetDateTime updatedAt = OffsetDateTime.now();
 
     public enum BookingStatus {
-        PENDING, CONFIRMED, CANCELLED
+        PENDING, CONFIRMED, CANCELLED, COMPLETED
     }
 
 }

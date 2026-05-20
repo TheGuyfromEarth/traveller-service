@@ -25,7 +25,13 @@ public interface EmergencySOSService {
     EmergencySOSDTO resolveSOS(Long sosId, String resolutionNotes);
     
     List<EmergencyContactDTO> getNearestEmergencyContacts(String country, String city);
-    
+
+    List<EmergencyContactDTO> getContactsForHotel(Long hotelId);
+
+    EmergencyContactDTO createEmergencyContact(EmergencyContactDTO dto);
+
+    void deleteEmergencyContact(Long contactId);
+
     EmergencyContactDTO getEmergencyContactById(Long contactId);
     
     void notifyEmergencyContacts(Long sosId);

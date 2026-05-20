@@ -20,7 +20,10 @@ public class HotelController {
     }
 
     @GetMapping
-    public List<Hotel> list() {
+    public List<Hotel> list(@RequestParam(required = false) Long hostId) {
+        if (hostId != null) {
+            return hotelService.findByHostId(hostId);
+        }
         return hotelService.findAll();
     }
 

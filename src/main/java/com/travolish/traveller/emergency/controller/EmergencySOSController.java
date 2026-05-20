@@ -150,6 +150,45 @@ public class EmergencySOSController {
     }
 
     /**
+     * Get emergency contacts for a hotel (host-managed chain)
+     * GET /api/emergency/contacts/hotel/{hotelId}
+     */
+    @GetMapping("/contacts/hotel/{hotelId}")
+    public ResponseEntity<List<EmergencyContactDTO>> getContactsForHotel(@PathVariable Long hotelId) {
+        return ResponseEntity.ok(emergencySOSService.getContactsForHotel(hotelId));
+    }
+
+    /**
+     * Create a new emergency contact
+     * POST /api/emergency/contacts
+     */
+    @PostMapping("/contacts")
+    public ResponseEntity<EmergencyContactDTO> createEmergencyContact(
+            @RequestBody EmergencyContactDTO dto) {
+        try {
+            EmergencyContactDTO created = emergencySOSService.createEmergencyContact(dto);
+            return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        } catch (Exception e) {
+            log.error("Error creating emergency contact", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Soft-delete an emergency contact
+     * DELETE /api/emergency/contacts/{contactId}
+     */
+    @DeleteMapping("/contacts/{contactId}")
+    public ResponseEntity<Void> deleteEmergencyContact(@PathVariable Long contactId) {
+        try {
+            emergencySOSService.deleteEmergencyContact(contactId);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Get emergency contact by ID
      * GET /api/emergency/contacts/{contactId}
      */

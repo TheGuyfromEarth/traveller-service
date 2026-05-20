@@ -25,4 +25,6 @@ public interface EmergencyContactRepository extends JpaRepository<EmergencyConta
     
     @Query("SELECT ec FROM EmergencyContact ec WHERE ec.isActive = true ORDER BY ec.responseTimeMinutes ASC")
     List<EmergencyContact> findAllActiveOrderedByResponseTime();
+
+    List<EmergencyContact> findByHotelIdAndIsActiveTrue(Long hotelId);
 }

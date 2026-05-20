@@ -21,6 +21,7 @@ import com.travolish.traveller.inventory.dto.RevenueForecastDTO;
 import com.travolish.traveller.inventory.dto.RoomInventoryInitDTO;
 import com.travolish.traveller.inventory.exception.InsufficientAvailabilityException;
 import com.travolish.traveller.inventory.model.RoomAvailability;
+import com.travolish.traveller.booking.repository.BookingRepository;
 import com.travolish.traveller.inventory.repository.PricingRuleRepository;
 import com.travolish.traveller.inventory.repository.RoomAvailabilityRepository;
 
@@ -36,6 +37,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     private final DynamicPricingService dynamicPricingService;
     private final RoomAvailabilityRepository availabilityRepository;
     private final PricingRuleRepository pricingRuleRepository;
+    private final BookingRepository bookingRepository;
 
     @Override
     public Boolean canBookRoom(Long roomId, Long hotelId, LocalDate checkInDate, LocalDate checkOutDate) {
@@ -233,23 +235,29 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     @Override
     public RevenueForecastDTO generateRevenueForecast(Long hotelId, LocalDate startDate, LocalDate endDate) {
         List<InventoryForecastDTO> dailyForecasts = new ArrayList<>();
-        double totalRevenue = 0;
 
         LocalDate current = startDate;
         while (!current.isAfter(endDate)) {
+            Double dayRevenue = bookingRepository.getTotalRevenueForHotelInPeriod(
+                hotelId, current, current.plusDays(1));
             var forecast = new InventoryForecastDTO();
             forecast.setDate(current);
+            forecast.setProjectedOccupancy((int)(dayRevenue != null ? dayRevenue : 0.0));
             dailyForecasts.add(forecast);
             current = current.plusDays(1);
         }
 
-        double avgDailyRevenue = totalRevenue / (ChronoUnit.DAYS.between(startDate, endDate) + 1);
+        Double totalRevenue = bookingRepository.getTotalRevenueForHotelInPeriod(
+            hotelId, startDate, endDate.plusDays(1));
+        double total = totalRevenue != null ? totalRevenue : 0.0;
+        long days = ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        double avgDailyRevenue = days > 0 ? total / days : 0.0;
 
         return RevenueForecastDTO.builder()
             .hotelId(hotelId)
             .startDate(startDate)
             .endDate(endDate)
-            .totalRevenue(totalRevenue)
+            .totalRevenue(total)
             .averageDailyRevenue(avgDailyRevenue)
             .dailyForecasts(dailyForecasts)
             .build();

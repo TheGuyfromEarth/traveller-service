@@ -51,7 +51,10 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public Booking create(Booking booking) {
         booking.setId(null);
-        
+        if (booking.getStatus() == null) {
+            booking.setStatus(Booking.BookingStatus.PENDING);
+        }
+
         // 1. Check availability for the date range
         Boolean isAvailable = availabilityService.isRoomAvailableForDateRange(
             booking.getRoomId(), 
@@ -80,26 +83,22 @@ public class BookingServiceImpl implements BookingService {
         
         // 3. Calculate price components
         Double basePrice = booking.getBasePrice();
-        
-        // Calculate seasonal adjustment
-        Double seasonalPrice = seasonalPricingService.calculateFinalPrice(
-            booking.getRoomId(),
-            booking.getCheckInDate(),
-            basePrice
-        );
-        Double seasonalAdjustment = seasonalPrice - basePrice;
+        long numberOfNights = ChronoUnit.DAYS.between(booking.getCheckInDate(), booking.getCheckOutDate());
+        if (numberOfNights <= 0) numberOfNights = 1;
+
+        // Seasonal adjustment for check-in night (price delta vs base)
+        Double seasonalNightPrice = seasonalPricingService.calculateFinalPrice(
+            booking.getRoomId(), booking.getCheckInDate(), basePrice);
+        Double seasonalAdjustment = (seasonalNightPrice - basePrice) * numberOfNights;
         booking.setSeasonalAdjustment(seasonalAdjustment);
-        
-        // Calculate dynamic pricing adjustment
-        Double dynamicPrice = dynamicPricingService.calculateDynamicPrice(
-            booking.getRoomId(),
-            booking.getCheckInDate()
-        );
-        Double dynamicAdjustment = dynamicPrice - basePrice;
+
+        // Dynamic pricing returns a multiplier (1.0 = no change)
+        Double dynamicMultiplier = dynamicPricingService.calculateDynamicPrice(
+            booking.getRoomId(), booking.getCheckInDate());
+        Double dynamicAdjustment = basePrice * (dynamicMultiplier - 1.0) * numberOfNights;
         booking.setDynamicPricingAdjustment(dynamicAdjustment);
-        
-        // Calculate total price (seasonal + dynamic adjustments)
-        Double calculatedTotalPrice = basePrice + seasonalAdjustment + dynamicAdjustment;
+
+        Double calculatedTotalPrice = (basePrice * numberOfNights) + seasonalAdjustment + dynamicAdjustment;
         booking.setTotalPrice(calculatedTotalPrice);
         
         booking.setCreatedAt(OffsetDateTime.now());
@@ -180,12 +179,12 @@ public class BookingServiceImpl implements BookingService {
         );
         Double seasonalAdjustment = (seasonalPrice - basePrice) * numberOfNights;
         
-        // Calculate dynamic pricing adjustment
-        Double dynamicPrice = dynamicPricingService.calculateDynamicPrice(
+        // Calculate dynamic pricing adjustment (returns a multiplier: 1.0 = no change)
+        Double dynamicMultiplier = dynamicPricingService.calculateDynamicPrice(
             roomId,
             checkInDate
         );
-        Double dynamicAdjustment = (dynamicPrice - basePrice) * numberOfNights;
+        Double dynamicAdjustment = basePrice * (dynamicMultiplier - 1.0) * numberOfNights;
         
         // Calculate promotional discount (default 0)
         Double promotionalDiscount = 0.0;
@@ -217,6 +216,11 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public List<Booking> findConfirmedBookingsInDateRange(Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
         return bookingRepository.findConfirmedBookingsInDateRange(roomId, checkInDate, checkOutDate);
+    }
+
+    @Override
+    public List<Booking> findByGuestEmail(String guestEmail) {
+        return bookingRepository.findByGuestEmailIgnoreCase(guestEmail);
     }
 
     @Override

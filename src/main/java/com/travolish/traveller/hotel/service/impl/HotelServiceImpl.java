@@ -23,6 +23,11 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
+    public List<Hotel> findByHostId(Long hostId) {
+        return hotelRepository.findByHostId(hostId);
+    }
+
+    @Override
     public Optional<Hotel> findById(Long id) {
         return hotelRepository.findById(id);
     }
@@ -36,9 +41,11 @@ public class HotelServiceImpl implements HotelService {
     @Override
     public Optional<Hotel> update(Long id, Hotel hotel) {
         return hotelRepository.findById(id).map(existing -> {
+            if (hotel.getHostId() != null) existing.setHostId(hotel.getHostId());
             existing.setName(hotel.getName());
             existing.setAddress(hotel.getAddress());
             existing.setCity(hotel.getCity());
+            existing.setCountry(hotel.getCountry());
             existing.setRating(hotel.getRating());
             existing.setPhone(hotel.getPhone());
             existing.setEmail(hotel.getEmail());

@@ -32,12 +32,13 @@ public class PayoutController {
     @PostMapping("/request")
     public ResponseEntity<PayoutDTO> requestPayout(
         @Valid @RequestBody PayoutRequest request,
+        @RequestParam(required = false) Long hostId,
         Authentication authentication) {
         try {
-            log.info("Payout request from user: {}", authentication.getName());
-            
-            Long hostId = extractHostIdFromAuth(authentication);
-            PayoutDTO payoutDTO = payoutService.requestPayout(hostId, request);
+            Long resolvedHostId = resolveHostId(authentication, hostId);
+            log.info("Payout request for host: {}", resolvedHostId);
+
+            PayoutDTO payoutDTO = payoutService.requestPayout(resolvedHostId, request);
             
             log.info("Payout requested successfully: {}", payoutDTO.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(payoutDTO);
@@ -79,12 +80,13 @@ public class PayoutController {
     @GetMapping("/history")
     public ResponseEntity<Page<PayoutHistoryDTO>> getPayoutHistory(
         Pageable pageable,
+        @RequestParam(required = false) Long hostId,
         Authentication authentication) {
         try {
-            Long hostId = extractHostIdFromAuth(authentication);
-            log.info("Fetching payout history for host: {}", hostId);
-            
-            Page<PayoutHistoryDTO> history = payoutService.getPayoutHistory(hostId, pageable);
+            Long resolvedHostId = resolveHostId(authentication, hostId);
+            log.info("Fetching payout history for host: {}", resolvedHostId);
+
+            Page<PayoutHistoryDTO> history = payoutService.getPayoutHistory(resolvedHostId, pageable);
             return ResponseEntity.ok(history);
         } catch (Exception e) {
             log.error("Error fetching payout history", e);
@@ -100,12 +102,13 @@ public class PayoutController {
     public ResponseEntity<Page<PayoutHistoryDTO>> getPayoutHistoryByStatus(
         @PathVariable String status,
         Pageable pageable,
+        @RequestParam(required = false) Long hostId,
         Authentication authentication) {
         try {
-            Long hostId = extractHostIdFromAuth(authentication);
-            log.info("Fetching {} payouts for host: {}", status, hostId);
-            
-            Page<PayoutHistoryDTO> history = payoutService.getPayoutHistoryByStatus(hostId, status, pageable);
+            Long resolvedHostId = resolveHostId(authentication, hostId);
+            log.info("Fetching {} payouts for host: {}", status, resolvedHostId);
+
+            Page<PayoutHistoryDTO> history = payoutService.getPayoutHistoryByStatus(resolvedHostId, status, pageable);
             return ResponseEntity.ok(history);
         } catch (Exception e) {
             log.error("Error fetching payout history by status", e);
@@ -118,12 +121,14 @@ public class PayoutController {
      * GET /api/payouts/balance
      */
     @GetMapping("/balance")
-    public ResponseEntity<PayoutBalanceDTO> getBalance(Authentication authentication) {
+    public ResponseEntity<PayoutBalanceDTO> getBalance(
+        @RequestParam(required = false) Long hostId,
+        Authentication authentication) {
         try {
-            Long hostId = extractHostIdFromAuth(authentication);
-            log.info("Fetching balance for host: {}", hostId);
-            
-            PayoutBalanceDTO balanceDTO = payoutService.getHostBalance(hostId);
+            Long resolvedHostId = resolveHostId(authentication, hostId);
+            log.info("Fetching balance for host: {}", resolvedHostId);
+
+            PayoutBalanceDTO balanceDTO = payoutService.getHostBalance(resolvedHostId);
             return ResponseEntity.ok(balanceDTO);
         } catch (Exception e) {
             log.error("Error fetching balance", e);
@@ -139,12 +144,13 @@ public class PayoutController {
     public ResponseEntity<List<PayoutDTO>> getPayoutsByDateRange(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+        @RequestParam(required = false) Long hostId,
         Authentication authentication) {
         try {
-            Long hostId = extractHostIdFromAuth(authentication);
-            log.info("Fetching payouts for host: {} from {} to {}", hostId, startDate, endDate);
-            
-            List<PayoutDTO> payouts = payoutService.getPayoutsByDateRange(hostId, startDate, endDate);
+            Long resolvedHostId = resolveHostId(authentication, hostId);
+            log.info("Fetching payouts for host: {} from {} to {}", resolvedHostId, startDate, endDate);
+
+            List<PayoutDTO> payouts = payoutService.getPayoutsByDateRange(resolvedHostId, startDate, endDate);
             return ResponseEntity.ok(payouts);
         } catch (Exception e) {
             log.error("Error fetching payouts by date range", e);
@@ -271,9 +277,10 @@ public class PayoutController {
     }
     
     /**
-     * Helper method to extract host ID from authentication
+     * Resolve host ID from authentication or fallback query param
      */
-    private Long extractHostIdFromAuth(Authentication authentication) {
+    private Long resolveHostId(Authentication authentication, Long fallbackHostId) {
+        if (fallbackHostId != null) return fallbackHostId;
         // Placeholder - in production, extract from JWT token or session
         return 1L;
     }

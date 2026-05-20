@@ -7,6 +7,7 @@ import com.travolish.traveller.hotel.model.Hotel;
 
 public interface HotelService {
     List<Hotel> findAll();
+    List<Hotel> findByHostId(Long hostId);
     Optional<Hotel> findById(Long id);
     Hotel create(Hotel hotel);
     Optional<Hotel> update(Long id, Hotel hotel);

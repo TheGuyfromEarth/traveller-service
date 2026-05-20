@@ -1,6 +1,7 @@
 package com.travolish.traveller.hotel.service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -32,9 +33,17 @@ public class HotelSearchService {
         Pageable pageable = PageRequest.of(searchRequest.getPageNumber(), searchRequest.getPageSize());
         Page<Hotel> hotelPage = hotelRepository.findAll(spec, pageable);
 
-        List<HotelSearchResponse> responseList = hotelPage.getContent()
+        List<Hotel> hotels = hotelPage.getContent();
+        List<Long> ids = hotels.stream().map(Hotel::getId).collect(Collectors.toList());
+        Map<Long, Integer> reviewCounts = hotelRepository.countReviewsByHotelIds(ids)
                 .stream()
-                .map(this::mapToResponse)
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> ((Number) row[1]).intValue()
+                ));
+
+        List<HotelSearchResponse> responseList = hotels.stream()
+                .map(h -> mapToResponse(h, reviewCounts.getOrDefault(h.getId(), 0)))
                 .collect(Collectors.toList());
 
         return new PageImpl<>(responseList, pageable, hotelPage.getTotalElements());
@@ -48,7 +57,7 @@ public class HotelSearchService {
                 .and(HotelSpecification.withMaxRating(searchRequest.getMaxRating()));
     }
 
-    private HotelSearchResponse mapToResponse(Hotel hotel) {
+    private HotelSearchResponse mapToResponse(Hotel hotel, int reviewCount) {
         return HotelSearchResponse.builder()
                 .id(hotel.getId())
                 .name(hotel.getName())
@@ -56,7 +65,7 @@ public class HotelSearchService {
                 .city(hotel.getCity())
                 .country(hotel.getCountry())
                 .rating(hotel.getRating())
-                .reviewCount(hotel.getReviews() != null ? hotel.getReviews().size() : 0)
+                .reviewCount(reviewCount)
                 .phone(hotel.getPhone())
                 .email(hotel.getEmail())
                 .description(hotel.getDescription())

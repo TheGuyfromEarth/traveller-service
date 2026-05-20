@@ -24,7 +24,10 @@ public class BookingController {
     }
 
     @GetMapping
-    public List<Booking> list() {
+    public List<Booking> list(@RequestParam(required = false) String guestEmail) {
+        if (guestEmail != null && !guestEmail.isBlank()) {
+            return bookingService.findByGuestEmail(guestEmail);
+        }
         return bookingService.findAll();
     }
 

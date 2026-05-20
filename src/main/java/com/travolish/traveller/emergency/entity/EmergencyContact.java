@@ -19,6 +19,10 @@ public class EmergencyContact {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private Long hotelId;
+
+    private String label;
+
     @Column(nullable = false)
     private String country;
 

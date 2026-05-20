@@ -24,6 +24,11 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByHotelId(Long hotelId);
 
     /**
+     * Find all bookings for a specific guest email
+     */
+    List<Booking> findByGuestEmailIgnoreCase(String guestEmail);
+
+    /**
      * Find all bookings for a specific room and status
      */
     List<Booking> findByRoomIdAndStatus(Long roomId, Booking.BookingStatus status);
@@ -78,4 +83,24 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("SELECT AVG(b.totalPrice) FROM Booking b WHERE b.roomId = :roomId " +
            "AND b.status = com.travolish.traveller.booking.model.Booking.BookingStatus.CONFIRMED")
     Double getAverageBookingValueForRoom(@Param("roomId") Long roomId);
+
+    /**
+     * Sum revenue from non-cancelled bookings for a hotel in a check-in date range
+     */
+    @Query("SELECT SUM(b.totalPrice) FROM Booking b WHERE b.hotelId = :hotelId " +
+           "AND b.status != com.travolish.traveller.booking.model.Booking.BookingStatus.CANCELLED " +
+           "AND b.checkInDate >= :startDate AND b.checkInDate < :endDate")
+    Double getTotalRevenueForHotelInPeriod(@Param("hotelId") Long hotelId,
+                                           @Param("startDate") LocalDate startDate,
+                                           @Param("endDate") LocalDate endDate);
+
+    /**
+     * Count non-cancelled bookings for a hotel in a check-in date range
+     */
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.hotelId = :hotelId " +
+           "AND b.status != com.travolish.traveller.booking.model.Booking.BookingStatus.CANCELLED " +
+           "AND b.checkInDate >= :startDate AND b.checkInDate < :endDate")
+    Long countNonCancelledBookingsForHotelInPeriod(@Param("hotelId") Long hotelId,
+                                                    @Param("startDate") LocalDate startDate,
+                                                    @Param("endDate") LocalDate endDate);
 }

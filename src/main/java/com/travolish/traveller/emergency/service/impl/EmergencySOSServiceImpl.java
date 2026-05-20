@@ -138,6 +138,43 @@ public class EmergencySOSServiceImpl implements EmergencySOSService {
     }
 
     @Override
+    public List<EmergencyContactDTO> getContactsForHotel(Long hotelId) {
+        return emergencyContactRepository.findByHotelIdAndIsActiveTrue(hotelId)
+                .stream()
+                .map(this::mapContactToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public EmergencyContactDTO createEmergencyContact(EmergencyContactDTO dto) {
+        EmergencyContact contact = EmergencyContact.builder()
+                .hotelId(dto.getHotelId())
+                .label(dto.getLabel())
+                .country(dto.getCountry() != null ? dto.getCountry() : "")
+                .city(dto.getCity() != null ? dto.getCity() : "")
+                .contactType(dto.getContactType() != null
+                        ? EmergencyContact.ContactType.valueOf(dto.getContactType())
+                        : EmergencyContact.ContactType.OTHER)
+                .contactName(dto.getContactName())
+                .contactNumber(dto.getContactNumber())
+                .description(dto.getDescription())
+                .address(dto.getAddress())
+                .email(dto.getEmail())
+                .operatingHours(dto.getOperatingHours())
+                .responseTimeMinutes(dto.getResponseTimeMinutes())
+                .build();
+        return mapContactToDTO(emergencyContactRepository.save(contact));
+    }
+
+    @Override
+    public void deleteEmergencyContact(Long contactId) {
+        emergencyContactRepository.findById(contactId).ifPresent(c -> {
+            c.setIsActive(false);
+            emergencyContactRepository.save(c);
+        });
+    }
+
+    @Override
     public EmergencyContactDTO getEmergencyContactById(Long contactId) {
         EmergencyContact contact = emergencyContactRepository.findById(contactId)
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
@@ -200,6 +237,8 @@ public class EmergencySOSServiceImpl implements EmergencySOSService {
     private EmergencyContactDTO mapContactToDTO(EmergencyContact contact) {
         return EmergencyContactDTO.builder()
                 .id(contact.getId())
+                .hotelId(contact.getHotelId())
+                .label(contact.getLabel())
                 .country(contact.getCountry())
                 .city(contact.getCity())
                 .contactType(contact.getContactType().toString())

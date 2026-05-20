@@ -47,4 +47,9 @@ public interface BookingService {
      * Cancel a booking by ID
      */
     void cancelBooking(Long bookingId);
+
+    /**
+     * Get all bookings for a specific guest email
+     */
+    List<Booking> findByGuestEmail(String guestEmail);
 }

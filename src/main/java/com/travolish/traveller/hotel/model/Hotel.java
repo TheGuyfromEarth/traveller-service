@@ -20,6 +20,8 @@ public class Hotel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private Long hostId;
+
     @NotBlank
     @Column(nullable = false)
     private String name;

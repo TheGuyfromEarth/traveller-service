@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @Builder
 public class EmergencyContactDTO {
     private Long id;
+    private Long hotelId;
+    private String label;
     private String country;
     private String city;
     private String contactType;

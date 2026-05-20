@@ -88,12 +88,18 @@ public class KYCService {
      * This method saves KYC data with a temporary status, to be linked to a user after they sign in
      */
     @Transactional
-    public HostKYCDTO submitKYCTemporary(SubmitKYCRequest request) {
-        log.info("Submitting temporary KYC without authentication");
-        
+    public HostKYCDTO submitKYCTemporary(Long hostId, SubmitKYCRequest request) {
+        log.info("Submitting temporary KYC for host: {}", hostId);
+
+        // Return existing record if one already exists for this host
+        var existing = hostKYCRepository.findByHostId(hostId);
+        if (existing.isPresent()) {
+            log.info("KYC already exists for host: {}, returning existing record", hostId);
+            return modelMapper.map(existing.get(), HostKYCDTO.class);
+        }
+
         HostKYC hostKYC = new HostKYC();
-        // Set hostId as null or 0 to indicate this is a temporary KYC pending authentication
-        hostKYC.setHostId(10L);
+        hostKYC.setHostId(hostId);
         hostKYC.setFirstName(request.getFirstName());
         hostKYC.setLastName(request.getLastName());
         hostKYC.setDateOfBirth(request.getDateOfBirth());
@@ -146,9 +152,18 @@ public class KYCService {
     @Transactional
     public HostDocumentDTO uploadDocument(Long hostId, DocumentUploadRequest request) {
         log.info("Uploading document for host: {}, type: {}", hostId, request.getDocumentType());
-        
-        var hostKYC = hostKYCRepository.findByHostId(hostId)
-            .orElseThrow(() -> new IllegalArgumentException("KYC not found for host: " + hostId));
+
+        // Auto-create KYC record if it doesn't exist yet
+        var hostKYC = hostKYCRepository.findByHostId(hostId).orElseGet(() -> {
+            HostKYC newKyc = new HostKYC();
+            newKyc.setHostId(hostId);
+            newKyc.setKycStatus("PENDING");
+            newKyc.setVerificationLevel("LEVEL_0");
+            newKyc.setCreatedAt(LocalDateTime.now());
+            newKyc.setUpdatedAt(LocalDateTime.now());
+            assessRisk(newKyc);
+            return hostKYCRepository.save(newKyc);
+        });
         
         // Check if document type already exists and verified
         var existingDocument = hostDocumentRepository
@@ -162,9 +177,9 @@ public class KYCService {
         document.setHostKYC(hostKYC);
         document.setDocumentType(request.getDocumentType());
         document.setDocumentNumber(request.getDocumentNumber());
-        document.setFileUrl(request.getFileUrl());
-        document.setIssuedDate(LocalDate.parse(request.getIssuedDate()));
-        document.setExpiryDate(LocalDate.parse(request.getExpiryDate()));
+        document.setFileUrl(request.getFileUrl() != null ? request.getFileUrl() : "pending-upload");
+        document.setIssuedDate(request.getIssuedDate() != null ? LocalDate.parse(request.getIssuedDate()) : LocalDate.now());
+        document.setExpiryDate(request.getExpiryDate() != null ? LocalDate.parse(request.getExpiryDate()) : LocalDate.now().plusYears(10));
         
         // Set initial verification status
         document.setVerificationStatus("PENDING");
@@ -242,9 +257,18 @@ public class KYCService {
     @Transactional
     public HostBankAccountDTO registerBankAccount(Long hostId, BankAccountVerificationRequest request) {
         log.info("Registering bank account for host: {}", hostId);
-        
-        var hostKYC = hostKYCRepository.findByHostId(hostId)
-            .orElseThrow(() -> new IllegalArgumentException("KYC not found for host: " + hostId));
+
+        // Auto-create KYC record if it doesn't exist yet
+        var hostKYC = hostKYCRepository.findByHostId(hostId).orElseGet(() -> {
+            HostKYC newKyc = new HostKYC();
+            newKyc.setHostId(hostId);
+            newKyc.setKycStatus("PENDING");
+            newKyc.setVerificationLevel("LEVEL_0");
+            newKyc.setCreatedAt(LocalDateTime.now());
+            newKyc.setUpdatedAt(LocalDateTime.now());
+            assessRisk(newKyc);
+            return hostKYCRepository.save(newKyc);
+        });
         
         // Check for duplicate account
         var existingAccount = hostBankAccountRepository
@@ -256,31 +280,35 @@ public class KYCService {
         
         HostBankAccount bankAccount = new HostBankAccount();
         bankAccount.setHostKYC(hostKYC);
-        bankAccount.setBankName(request.getBankName());
+        bankAccount.setBankName(request.getBankName() != null ? request.getBankName() : "Unknown Bank");
         bankAccount.setAccountNumber(request.getAccountNumber());
-        bankAccount.setAccountHolderName(request.getAccountHolderName());
-        bankAccount.setAccountType(request.getAccountType());
+        bankAccount.setAccountHolderName(request.getAccountHolderName() != null ? request.getAccountHolderName() : "Account Holder");
+        bankAccount.setAccountType(request.getAccountType() != null ? request.getAccountType() : "SAVINGS");
         bankAccount.setSwiftCode(request.getSwiftCode());
         bankAccount.setIban(request.getIban());
         bankAccount.setRoutingNumber(request.getRoutingNumber());
-        
+        bankAccount.setCountry(request.getCountry() != null ? request.getCountry() : "IN");
+        bankAccount.setCurrency(request.getCurrency() != null ? request.getCurrency() : "INR");
+
         // Set verification method
         bankAccount.setVerificationMethod(request.getVerificationMethod());
-        
+
         // Initialize verification status
         if ("DOCUMENT".equals(request.getVerificationMethod())) {
             bankAccount.setDocumentVerified(false);
             bankAccount.setVerificationStatus("PENDING");
             bankAccount.setBankStatementUrl(request.getBankStatementUrl());
         } else if ("MICRO_DEPOSIT".equals(request.getVerificationMethod())) {
-            // Generate micro deposit amounts
             generateMicroDeposits(bankAccount);
             bankAccount.setVerificationStatus("AWAITING_CONFIRMATION");
+        } else {
+            bankAccount.setVerificationStatus("PENDING");
         }
-        
+
         bankAccount.setIsPrimary(false);
         bankAccount.setIsActive(true);
         bankAccount.setCreatedAt(LocalDateTime.now());
+        bankAccount.setUpdatedAt(LocalDateTime.now());
         
         bankAccount = hostBankAccountRepository.save(bankAccount);
         log.info("Bank account registered for host: {}", hostId);
@@ -460,24 +488,19 @@ public class KYCService {
      */
     @Transactional(readOnly = true)
     public List<HostDocumentDTO> getDocuments(Long hostId) {
-        var hostKYC = hostKYCRepository.findByHostId(hostId)
-            .orElseThrow(() -> new IllegalArgumentException("KYC not found for host: " + hostId));
-        
-        return hostDocumentRepository.findByHostKYCId(hostKYC.getId())
+        var hostKYCOpt = hostKYCRepository.findByHostId(hostId);
+        if (hostKYCOpt.isEmpty()) return List.of();
+        return hostDocumentRepository.findByHostKYCId(hostKYCOpt.get().getId())
             .stream()
             .map(d -> modelMapper.map(d, HostDocumentDTO.class))
             .collect(Collectors.toList());
     }
-    
-    /**
-     * Get list of bank accounts for a host
-     */
+
     @Transactional(readOnly = true)
     public List<HostBankAccountDTO> getBankAccounts(Long hostId) {
-        var hostKYC = hostKYCRepository.findByHostId(hostId)
-            .orElseThrow(() -> new IllegalArgumentException("KYC not found for host: " + hostId));
-        
-        return hostBankAccountRepository.findByHostKYCId(hostKYC.getId())
+        var hostKYCOpt = hostKYCRepository.findByHostId(hostId);
+        if (hostKYCOpt.isEmpty()) return List.of();
+        return hostBankAccountRepository.findByHostKYCId(hostKYCOpt.get().getId())
             .stream()
             .map(b -> modelMapper.map(b, HostBankAccountDTO.class))
             .collect(Collectors.toList());

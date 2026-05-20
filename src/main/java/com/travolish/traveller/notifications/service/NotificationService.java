@@ -175,22 +175,36 @@ public class NotificationService {
     }
     
     /**
-     * Get user notification preferences
+     * Get user notification preferences — auto-creates with defaults if none exist
      */
     public UserNotificationPreferenceDTO getUserPreferences(Long userId) {
-        UserNotificationPreference pref = preferenceRepository.findByUserId(userId)
-            .orElseThrow(() -> new NotificationNotFoundException("Preferences not found for user: " + userId));
+        UserNotificationPreference pref = getOrCreateUserPreference(userId);
         return modelMapper.map(pref, UserNotificationPreferenceDTO.class);
     }
-    
+
     /**
-     * Update user notification preferences
+     * Update user notification preferences — upserts; never overwrites userId
      */
     public UserNotificationPreferenceDTO updateUserPreferences(Long userId, UserNotificationPreferenceDTO dto) {
-        UserNotificationPreference pref = preferenceRepository.findByUserId(userId)
-            .orElseThrow(() -> new NotificationNotFoundException("Preferences not found for user: " + userId));
-        
-        modelMapper.map(dto, pref);
+        UserNotificationPreference pref = getOrCreateUserPreference(userId);
+
+        if (dto.getEmailEnabled() != null) pref.setEmailEnabled(dto.getEmailEnabled());
+        if (dto.getSmsEnabled() != null) pref.setSmsEnabled(dto.getSmsEnabled());
+        if (dto.getInAppEnabled() != null) pref.setInAppEnabled(dto.getInAppEnabled());
+        if (dto.getBookingConfirmation() != null) pref.setBookingConfirmation(dto.getBookingConfirmation());
+        if (dto.getBookingReminder() != null) pref.setBookingReminder(dto.getBookingReminder());
+        if (dto.getCheckInReminder() != null) pref.setCheckInReminder(dto.getCheckInReminder());
+        if (dto.getCheckOutReminder() != null) pref.setCheckOutReminder(dto.getCheckOutReminder());
+        if (dto.getPaymentNotifications() != null) pref.setPaymentNotifications(dto.getPaymentNotifications());
+        if (dto.getPromotionalOffers() != null) pref.setPromotionalOffers(dto.getPromotionalOffers());
+        if (dto.getLoyaltyUpdates() != null) pref.setLoyaltyUpdates(dto.getLoyaltyUpdates());
+        if (dto.getReviewRequests() != null) pref.setReviewRequests(dto.getReviewRequests());
+        if (dto.getAccountAlerts() != null) pref.setAccountAlerts(dto.getAccountAlerts());
+        if (dto.getQuietHoursEnabled() != null) pref.setQuietHoursEnabled(dto.getQuietHoursEnabled());
+        if (dto.getQuietHoursStart() != null) pref.setQuietHoursStart(dto.getQuietHoursStart());
+        if (dto.getQuietHoursEnd() != null) pref.setQuietHoursEnd(dto.getQuietHoursEnd());
+        if (dto.getUnsubscribedTypes() != null) pref.setUnsubscribedTypes(dto.getUnsubscribedTypes());
+
         UserNotificationPreference saved = preferenceRepository.save(pref);
         return modelMapper.map(saved, UserNotificationPreferenceDTO.class);
     }
