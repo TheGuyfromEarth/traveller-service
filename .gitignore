@@ -36,6 +36,12 @@ out/
 ### VS Code ###
 .vscode/
 
+### Secrets ###
+.env
+*.p8
+*.pem
+*-service-account*.json
+
 *.txt
 *.md
 *.sh

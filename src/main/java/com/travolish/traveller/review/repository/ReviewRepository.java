@@ -56,6 +56,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT COUNT(r) FROM Review r WHERE r.hotelId = :hotelId AND r.status = 'APPROVED' AND r.reviewType = 'HOTEL'")
     Long countApprovedHotelReviews(@Param("hotelId") Long hotelId);
 
+    // Find reviews by room and status (for stats aggregation)
+    @Query("SELECT r FROM Review r WHERE r.roomId = :roomId AND r.status = :status AND r.reviewType = 'ROOM' ORDER BY r.createdAt DESC")
+    List<Review> findByRoomIdAndStatus(@Param("roomId") Long roomId, @Param("status") ReviewStatus status);
+
     // Count approved reviews for room
     @Query("SELECT COUNT(r) FROM Review r WHERE r.roomId = :roomId AND r.status = 'APPROVED' AND r.reviewType = 'ROOM'")
     Long countApprovedRoomReviews(@Param("roomId") Long roomId);
@@ -67,4 +71,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // Find flagged reviews for moderation
     @Query("SELECT r FROM Review r WHERE r.status = 'FLAGGED' ORDER BY r.createdAt ASC")
     Page<Review> findFlaggedReviews(Pageable pageable);
+
+    @Query("SELECT COUNT(r) FROM Review r WHERE r.status = :status")
+    long countByReviewStatus(@Param("status") ReviewStatus status);
 }

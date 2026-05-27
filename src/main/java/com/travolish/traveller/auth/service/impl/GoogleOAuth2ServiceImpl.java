@@ -36,7 +36,7 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @Value("${spring.security.oauth2.client.registration.google.client-id:1011344852484-ptc8n4lcmig0k9tmnfsp6bumngeh3e2d.apps.googleusercontent.com}")
+    @Value("${google.oauth2.client-id}")
     private String googleClientId;
 
     @Value("${google.oauth2.verify-signature:true}")

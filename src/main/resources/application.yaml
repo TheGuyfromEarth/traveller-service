@@ -2,10 +2,9 @@ spring:
   application:
     name: traveller-service
   datasource:
-    # PostgreSQL database connection to Supabase
-    url: ${DB_URL:jdbc:postgresql://db.hizprgnbtsomiucqwull.supabase.co:5432/postgres?sslmode=require}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:#Orion2026*}
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -16,6 +15,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -23,59 +23,14 @@ spring:
   sql:
     init:
       mode: never
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: ${GOOGLE_CLIENT_ID:1011344852484-ptc8n4lcmig0k9tmnfsp6bumngeh3e2d.apps.googleusercontent.com}
-            client-secret: ${GOOGLE_CLIENT_SECRET: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}
-            authorization-grant-type: authorization_code
-            scope:
-              - openid
-              - profile
-              - email
-            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
-          facebook:
-            client-id: ${FACEBOOK_APP_ID:lorem}
-            client-secret: ${FACEBOOK_APP_SECRET:lorem}
-            authorization-grant-type: authorization_code
-            scope:
-              - email
-              - public_profile
-            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
-          apple:
-            client-id: ${APPLE_CLIENT_ID:com.travolish.app}
-            client-secret: ${APPLE_CLIENT_SECRET:lorem}
-            authorization-grant-type: authorization_code
-            scope:
-              - openid
-              - email
-            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
-        provider:
-          google:
-            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
-            token-uri: https://oauth2.googleapis.com/token
-            user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
-            user-name-attribute: sub
-          facebook:
-            authorization-uri: https://www.facebook.com/v18.0/oauth/authorize
-            token-uri: https://graph.facebook.com/v18.0/oauth/access_token
-            user-info-uri: https://graph.facebook.com/v18.0/me?fields=id,first_name,last_name,email,picture.type(large)
-            user-name-attribute: id
-          apple:
-            authorization-uri: https://appleid.apple.com/auth/authorize
-            token-uri: https://appleid.apple.com/auth/token
-            user-info-uri: https://api.appleid.apple.com/auth/access_token
-            user-name-attribute: sub
   s3:
     bucket: ${S3_BUCKET:travolish-bucket}
     region: ${AWS_REGION:us-east-1}
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:your-email@gmail.com}
-    password: ${MAIL_PASSWORD:your-app-password}
+    host: smtp-relay.brevo.com
+    port: 587
+    username: ${BREVO_SMTP_LOGIN}
+    password: ${BREVO_SMTP_KEY}
     properties:
       mail:
         smtp:
@@ -97,18 +52,30 @@ spring:
         await-termination: true
         await-termination-period: 30s
 
-# Supabase Storage configuration (replaces S3)
+# Google Cloud Storage
+gcs:
+  bucket-name: ${GCS_BUCKET_NAME:travolish-avatars}
+
+# Supabase Storage (database + file storage — auth handled by Google directly)
 supabase:
-  url: ${SUPABASE_URL:https://hizprgnbtsomiucqwull.supabase.co}
-  api-key: ${SUPABASE_API_KEY:sb_secret_WPBZQfTWhnTSBDgAO-uxQQ_2NUf4yuD}
+  url: ${SUPABASE_URL}
+  api-key: ${SUPABASE_API_KEY}
   bucket-name: ${SUPABASE_BUCKET_NAME:travolish-bucket}
 
-# Google OAuth2 configuration
+# Google OAuth2
 google:
   oauth2:
-    verify-signature: ${GOOGLE_VERIFY_SIGNATURE:false}  # Set to false for dev/testing, true for production
+    client-id: ${GOOGLE_CLIENT_ID}
+    verify-signature: ${GOOGLE_VERIFY_SIGNATURE:true}
 
-# Apple OAuth configuration (custom implementation)
+# JWT — tokens issued by this service after Google sign-in
+jwt:
+  secret: ${JWT_SECRET:travolish-secret-key-for-oauth2-authentication-tokens-please-change-in-production}
+  expiration: 3600000
+  refresh:
+    expiration: 604800000
+
+# Apple OAuth configuration
 apple:
   client-id: ${APPLE_CLIENT_ID:com.travolish.app}
   team-id: ${APPLE_TEAM_ID:ABCD123456}
@@ -116,16 +83,15 @@ apple:
   key-path: ${APPLE_KEY_PATH:/path/to/apple/key.p8}
   bundle-id: ${APPLE_BUNDLE_ID:com.travolish}
 
-# SMS configuration (for Twilio or similar providers)
+# SMS configuration
 sms:
   enabled: ${SMS_ENABLED:false}
-  provider: ${SMS_PROVIDER:mock} # Options: mock, twilio, aws-sns
+  provider: ${SMS_PROVIDER:mock}
   twilio:
     account-sid: ${TWILIO_ACCOUNT_SID:}
     auth-token: ${TWILIO_AUTH_TOKEN:}
     phone-number: ${TWILIO_PHONE_NUMBER:}
 
-# Springdoc (Swagger) UI will be available at /swagger-ui.html or /swagger-ui/index.html
 server:
   port: 8080
   error:
@@ -135,5 +101,11 @@ server:
 
 logging:
   level:
-    org.hibernate.SQL: DEBUG
     com.travolish.traveller.notifications: INFO
+
+# ── Test data ────────────────────────────────────────────────────────────────
+# Set to true to seed admin test data on startup (users, hotels, KYC,
+# reviews, bookings, pricing rules). Skips automatically if already seeded.
+# Catalog items are always seeded by CatalogDataInitializer regardless of this flag.
+app:
+  init-test-data: false

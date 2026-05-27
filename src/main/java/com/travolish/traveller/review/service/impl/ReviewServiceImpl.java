@@ -113,7 +113,7 @@ public class ReviewServiceImpl implements ReviewService {
                     .threeStars(0L)
                     .fourStars(0L)
                     .fiveStars(0L)
-                    .percentageRating(0.0)
+                    .fiveStarPercentage(0.0)
                     .build();
         }
 
@@ -122,11 +122,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public RatingStatsDTO getRoomRatingStats(Long roomId) {
-        List<Review> approvedReviews = reviewRepository.findByStatus(ReviewStatus.APPROVED, org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE))
-                .getContent()
-                .stream()
-                .filter(r -> roomId.equals(r.getRoomId()) && r.getReviewType() == ReviewType.ROOM)
-                .toList();
+        List<Review> approvedReviews = reviewRepository.findByRoomIdAndStatus(roomId, ReviewStatus.APPROVED);
 
         if (approvedReviews.isEmpty()) {
             return RatingStatsDTO.builder()
@@ -139,7 +135,7 @@ public class ReviewServiceImpl implements ReviewService {
                     .threeStars(0L)
                     .fourStars(0L)
                     .fiveStars(0L)
-                    .percentageRating(0.0)
+                    .fiveStarPercentage(0.0)
                     .build();
         }
 
@@ -171,7 +167,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .threeStars(threeStars)
                 .fourStars(fourStars)
                 .fiveStars(fiveStars)
-                .percentageRating(Math.round(percentageRating * 100.0) / 100.0)
+                .fiveStarPercentage(Math.round(percentageRating * 100.0) / 100.0)
                 .build();
     }
 
@@ -214,6 +210,17 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
 
         review.setStatus(ReviewStatus.FLAGGED);
+
+        Review savedReview = reviewRepository.save(review);
+        return convertToModeratorDTO(savedReview);
+    }
+
+    @Override
+    public ReviewModeratorDTO escalateReview(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
+
+        review.setStatus(ReviewStatus.ESCALATED);
 
         Review savedReview = reviewRepository.save(review);
         return convertToModeratorDTO(savedReview);

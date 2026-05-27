@@ -1,6 +1,8 @@
 package com.travolish.traveller.auth.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,11 +50,15 @@ public class OAuth2Config {
     }
 
     /**
-     * ObjectMapper bean for JSON serialization/deserialization
+     * ObjectMapper bean for JSON serialization/deserialization.
+     * JavaTimeModule + WRITE_DATES_AS_TIMESTAMPS=false ensures LocalDateTime /
+     * OffsetDateTime fields serialize as ISO-8601 strings, not arrays.
      */
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        return new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     /**

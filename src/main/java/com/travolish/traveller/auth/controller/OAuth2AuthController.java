@@ -7,6 +7,10 @@ import com.travolish.traveller.auth.dto.OAuth2AuthResponse;
 import com.travolish.traveller.auth.service.AppleOAuth2Service;
 import com.travolish.traveller.auth.service.FacebookOAuth2Service;
 import com.travolish.traveller.auth.service.GoogleOAuth2Service;
+import com.travolish.traveller.auth.util.JwtTokenProvider;
+import com.travolish.traveller.user.entity.User;
+import com.travolish.traveller.user.repository.UserRepository;
+import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -14,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -29,6 +34,12 @@ public class OAuth2AuthController {
 
     @Autowired
     private GoogleOAuth2Service googleOAuth2Service;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private UserRepository userRepository;
 
     /**
      * Apple OAuth2 Callback
@@ -147,6 +158,40 @@ public class OAuth2AuthController {
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorResponse("Google authentication failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Token Refresh
+     * POST /api/auth/refresh
+     *
+     * Exchanges a valid refresh token for a new access token.
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
+        String refreshToken = body.get("refreshToken");
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("refreshToken is required"));
+        }
+        try {
+            if (!jwtTokenProvider.validateToken(refreshToken)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Invalid or expired refresh token"));
+            }
+            Claims claims = jwtTokenProvider.extractClaims(refreshToken);
+            if (!"refresh".equals(claims.get("type"))) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Not a refresh token"));
+            }
+            Long userId = Long.parseLong(claims.getSubject());
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            String newAccessToken = jwtTokenProvider.generateToken(user);
+            return ResponseEntity.ok(Map.of(
+                    "accessToken", newAccessToken,
+                    "expiresIn", 3600
+            ));
+        } catch (Exception e) {
+            log.error("Token refresh failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Token refresh failed"));
         }
     }
 

@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,23 +19,31 @@ import com.travolish.traveller.inventory.exception.OverbookingException;
 import com.travolish.traveller.inventory.service.AvailabilityService;
 import com.travolish.traveller.inventory.service.SeasonalPricingService;
 import com.travolish.traveller.inventory.service.DynamicPricingService;
+import com.travolish.traveller.notifications.dto.SendNotificationRequest;
+import com.travolish.traveller.notifications.entity.NotificationChannel;
+import com.travolish.traveller.notifications.entity.NotificationType;
+import com.travolish.traveller.notifications.service.NotificationService;
 
 @Service
+@Slf4j
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final AvailabilityService availabilityService;
     private final SeasonalPricingService seasonalPricingService;
     private final DynamicPricingService dynamicPricingService;
+    private final NotificationService notificationService;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                            AvailabilityService availabilityService,
                            SeasonalPricingService seasonalPricingService,
-                           DynamicPricingService dynamicPricingService) {
+                           DynamicPricingService dynamicPricingService,
+                           NotificationService notificationService) {
         this.bookingRepository = bookingRepository;
         this.availabilityService = availabilityService;
         this.seasonalPricingService = seasonalPricingService;
         this.dynamicPricingService = dynamicPricingService;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -85,11 +94,15 @@ public class BookingServiceImpl implements BookingService {
         Double basePrice = booking.getBasePrice();
         long numberOfNights = ChronoUnit.DAYS.between(booking.getCheckInDate(), booking.getCheckOutDate());
         if (numberOfNights <= 0) numberOfNights = 1;
+        // Ensure the pricing range covers at least one night even for same-day bookings,
+        // because calculatePriceForDateRange iterates [checkIn, checkOut) exclusively.
+        LocalDate effectiveCheckOut = booking.getCheckInDate().plusDays(numberOfNights);
 
-        // Seasonal adjustment for check-in night (price delta vs base)
-        Double seasonalNightPrice = seasonalPricingService.calculateFinalPrice(
-            booking.getRoomId(), booking.getCheckInDate(), basePrice);
-        Double seasonalAdjustment = (seasonalNightPrice - basePrice) * numberOfNights;
+        // Seasonal adjustment: price every night in the stay individually so
+        // stays that span a season boundary are billed correctly.
+        Double seasonalTotal = seasonalPricingService.calculatePriceForDateRange(
+            booking.getRoomId(), booking.getCheckInDate(), effectiveCheckOut, basePrice);
+        Double seasonalAdjustment = seasonalTotal - (basePrice * numberOfNights);
         booking.setSeasonalAdjustment(seasonalAdjustment);
 
         // Dynamic pricing returns a multiplier (1.0 = no change)
@@ -113,7 +126,13 @@ public class BookingServiceImpl implements BookingService {
             booking.getCheckInDate(),
             booking.getCheckOutDate()
         );
-        
+
+        try {
+            notifyBookingConfirmation(savedBooking);
+        } catch (Exception e) {
+            log.warn("Booking confirmation email failed (booking saved): {}", e.getMessage());
+        }
+
         return savedBooking;
     }
 
@@ -121,17 +140,18 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public Optional<Booking> update(Long id, Booking booking) {
         return bookingRepository.findById(id).map(existing -> {
-            // Check if status is changing to CANCELLED
-            if (booking.getStatus() == Booking.BookingStatus.CANCELLED && 
-                existing.getStatus() != Booking.BookingStatus.CANCELLED) {
-                // Release rooms from availability
+            Booking.BookingStatus previousStatus = existing.getStatus();
+            Booking.BookingStatus newStatus = booking.getStatus();
+
+            if (newStatus == Booking.BookingStatus.CANCELLED &&
+                    previousStatus != Booking.BookingStatus.CANCELLED) {
                 availabilityService.cancelBooking(
                     existing.getRoomId(),
                     existing.getCheckInDate(),
                     existing.getCheckOutDate()
                 );
             }
-            
+
             existing.setRoomId(booking.getRoomId());
             existing.setHotelId(booking.getHotelId());
             existing.setGuestName(booking.getGuestName());
@@ -144,10 +164,24 @@ public class BookingServiceImpl implements BookingService {
             existing.setDynamicPricingAdjustment(booking.getDynamicPricingAdjustment());
             existing.setPromotionalDiscount(booking.getPromotionalDiscount());
             existing.setTotalPrice(booking.getTotalPrice());
-            existing.setStatus(booking.getStatus());
+            existing.setStatus(newStatus);
             existing.setNotes(booking.getNotes());
             existing.setUpdatedAt(OffsetDateTime.now());
-            return bookingRepository.save(existing);
+            Booking saved = bookingRepository.save(existing);
+
+            try {
+                if (newStatus == Booking.BookingStatus.CANCELLED &&
+                        previousStatus != Booking.BookingStatus.CANCELLED) {
+                    notifyBookingCancellation(saved);
+                } else if (newStatus == Booking.BookingStatus.CONFIRMED &&
+                        previousStatus != Booking.BookingStatus.CONFIRMED) {
+                    notifyBookingConfirmation(saved);
+                }
+            } catch (Exception e) {
+                log.warn("Booking status-change email failed (booking saved): {}", e.getMessage());
+            }
+
+            return saved;
         });
     }
 
@@ -168,16 +202,16 @@ public class BookingServiceImpl implements BookingService {
         if (numberOfNights <= 0) {
             numberOfNights = 1;
         }
-        
+        // Ensure the pricing range covers at least one night (see create() for rationale).
+        LocalDate effectiveCheckOut = checkInDate.plusDays(numberOfNights);
+
         Double basePriceTotal = basePrice * numberOfNights;
-        
-        // Calculate seasonal adjustment
-        Double seasonalPrice = seasonalPricingService.calculateFinalPrice(
-            roomId,
-            checkInDate,
-            basePrice
-        );
-        Double seasonalAdjustment = (seasonalPrice - basePrice) * numberOfNights;
+
+        // Calculate seasonal adjustment: price each night individually so stays
+        // spanning a season boundary are calculated correctly.
+        Double seasonalTotal = seasonalPricingService.calculatePriceForDateRange(
+            roomId, checkInDate, effectiveCheckOut, basePrice);
+        Double seasonalAdjustment = seasonalTotal - basePriceTotal;
         
         // Calculate dynamic pricing adjustment (returns a multiplier: 1.0 = no change)
         Double dynamicMultiplier = dynamicPricingService.calculateDynamicPrice(
@@ -223,23 +257,64 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.findByGuestEmailIgnoreCase(guestEmail);
     }
 
+    private void notifyBookingConfirmation(Booking booking) {
+        SendNotificationRequest req = new SendNotificationRequest();
+        req.setType(NotificationType.BOOKING_CONFIRMATION);
+        req.setChannel(NotificationChannel.EMAIL);
+        req.setRecipientEmail(booking.getGuestEmail());
+        req.setBookingId(booking.getId());
+        req.setHotelId(booking.getHotelId());
+        req.setSendImmediately(true);
+        req.setSubject("Booking Confirmed – Check-in " + booking.getCheckInDate());
+        req.setMessage("Hi " + booking.getGuestName() + ",\n\n"
+                + "Your booking has been confirmed.\n\n"
+                + "Check-in:  " + booking.getCheckInDate() + "\n"
+                + "Check-out: " + booking.getCheckOutDate() + "\n"
+                + "Total:     $" + String.format("%.2f", booking.getTotalPrice()) + "\n\n"
+                + "We look forward to welcoming you!");
+        notificationService.sendNotificationAsync(req);
+    }
+
+    private void notifyBookingCancellation(Booking booking) {
+        SendNotificationRequest req = new SendNotificationRequest();
+        req.setType(NotificationType.BOOKING_CANCELLATION);
+        req.setChannel(NotificationChannel.EMAIL);
+        req.setRecipientEmail(booking.getGuestEmail());
+        req.setBookingId(booking.getId());
+        req.setHotelId(booking.getHotelId());
+        req.setSendImmediately(true);
+        req.setSubject("Booking Cancellation Confirmed");
+        req.setMessage("Hi " + booking.getGuestName() + ",\n\n"
+                + "Your booking has been cancelled.\n\n"
+                + "Original check-in:  " + booking.getCheckInDate() + "\n"
+                + "Original check-out: " + booking.getCheckOutDate() + "\n\n"
+                + "If you did not request this cancellation, please contact support.");
+        notificationService.sendNotificationAsync(req);
+    }
+
     @Override
     @Transactional
-    public void cancelBooking(Long bookingId) {
-        bookingRepository.findById(bookingId).ifPresent(booking -> {
-            if (booking.getStatus() != Booking.BookingStatus.CANCELLED) {
-                // Release rooms from availability
-                availabilityService.cancelBooking(
-                    booking.getRoomId(),
-                    booking.getCheckInDate(),
-                    booking.getCheckOutDate()
-                );
-                
-                // Update booking status
-                booking.setStatus(Booking.BookingStatus.CANCELLED);
-                booking.setUpdatedAt(OffsetDateTime.now());
-                bookingRepository.save(booking);
+    public boolean cancelBooking(Long bookingId) {
+        Optional<Booking> found = bookingRepository.findById(bookingId);
+        if (found.isEmpty()) {
+            return false;
+        }
+        Booking booking = found.get();
+        if (booking.getStatus() != Booking.BookingStatus.CANCELLED) {
+            availabilityService.cancelBooking(
+                booking.getRoomId(),
+                booking.getCheckInDate(),
+                booking.getCheckOutDate()
+            );
+            booking.setStatus(Booking.BookingStatus.CANCELLED);
+            booking.setUpdatedAt(OffsetDateTime.now());
+            bookingRepository.save(booking);
+            try {
+                notifyBookingCancellation(booking);
+            } catch (Exception e) {
+                log.warn("Booking cancellation email failed (booking saved): {}", e.getMessage());
             }
-        });
+        }
+        return true;
     }
 }

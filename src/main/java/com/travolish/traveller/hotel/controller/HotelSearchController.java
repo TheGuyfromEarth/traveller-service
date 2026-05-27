@@ -23,6 +23,7 @@ public class HotelSearchController {
 
     @GetMapping
     public ResponseEntity<Page<HotelSearchResponse>> searchHotels(
+            @RequestParam(required = false) String query,
             @RequestParam(required = false) String country,
             @RequestParam(required = false) String city,
             @RequestParam(required = false) String name,
@@ -32,6 +33,7 @@ public class HotelSearchController {
             @RequestParam(defaultValue = "10") Integer pageSize) {
 
         HotelSearchRequest searchRequest = HotelSearchRequest.builder()
+                .query(query)
                 .country(country)
                 .city(city)
                 .name(name)

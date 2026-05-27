@@ -2,6 +2,7 @@ package com.travolish.traveller.inventory.service.impl;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -123,10 +124,14 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     @Override
     public Double calculateFinalPrice(Long roomId, LocalDate date, Double basePrice) {
         List<PricingRule> rules = pricingRuleRepository.findApplicableRulesForDate(roomId, date);
-        
+
         if (rules.isEmpty()) {
             return basePrice;
         }
+
+        // Sort ascending by priority so the highest-priority rule is evaluated last
+        // and its result is the one that takes effect (higher number = more specific/important).
+        rules.sort(Comparator.comparingInt(PricingRule::getPriority));
 
         double finalPrice = basePrice;
         for (PricingRule rule : rules) {

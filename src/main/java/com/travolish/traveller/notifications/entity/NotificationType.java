@@ -13,6 +13,7 @@ public enum NotificationType {
     REVIEW_REQUEST("Please Leave a Review"),
     PROMOTIONAL_OFFER("Special Offer"),
     LOYALTY_POINTS_EARNED("Loyalty Points Earned"),
+    WELCOME("Welcome to Travolish"),
     PASSWORD_RESET("Password Reset Request"),
     EMAIL_VERIFICATION("Email Verification"),
     ACCOUNT_ALERT("Account Alert"),

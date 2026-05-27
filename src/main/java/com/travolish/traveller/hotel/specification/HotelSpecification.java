@@ -39,4 +39,15 @@ public class HotelSpecification {
                 criteriaBuilder.lessThanOrEqualTo(root.get("rating"), maxRating);
     }
 
+    public static Specification<Hotel> withQuery(String query) {
+        return (root, cq, cb) -> {
+            if (query == null || query.isBlank()) return cb.conjunction();
+            String pattern = "%" + query.toLowerCase() + "%";
+            return cb.or(
+                cb.like(cb.lower(root.get("name")), pattern),
+                cb.like(cb.lower(root.get("city")), pattern)
+            );
+        };
+    }
+
 }

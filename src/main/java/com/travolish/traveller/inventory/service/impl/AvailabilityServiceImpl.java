@@ -78,12 +78,17 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     @Override
     @Transactional
     public void bookRoom(Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
-        if (!isRoomAvailableForDateRange(roomId, checkInDate, checkOutDate)) {
+        // Acquire row-level write locks on all affected dates before reading counts,
+        // so concurrent requests for the same room/dates are serialised here rather
+        // than racing past the caller's availability check (TOCTOU prevention).
+        List<RoomAvailability> availabilities = availabilityRepository
+            .findByRoomIdAndDateRangeWithLock(roomId, checkInDate, checkOutDate.minusDays(1));
+
+        boolean anyUnavailable = availabilities.isEmpty() ||
+            availabilities.stream().anyMatch(a -> !a.isAvailableForBooking());
+        if (anyUnavailable) {
             throw OverbookingException.noRoomAvailable(roomId, null);
         }
-
-        List<RoomAvailability> availabilities = availabilityRepository
-            .findByRoomIdAndAvailabilityDateBetween(roomId, checkInDate, checkOutDate.minusDays(1));
 
         availabilities.forEach(availability -> {
             availability.addBooking();

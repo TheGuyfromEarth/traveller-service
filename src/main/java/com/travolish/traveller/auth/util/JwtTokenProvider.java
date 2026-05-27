@@ -43,6 +43,7 @@ public class JwtTokenProvider {
         log.debug("Generating JWT token for user: {}", user.getId());
         return Jwts.builder()
                 .setClaims(buildTokenClaims(user))
+                .setSubject(String.valueOf(user.getId()))
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS512)

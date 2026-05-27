@@ -50,6 +50,8 @@ public class HotelServiceImpl implements HotelService {
             existing.setPhone(hotel.getPhone());
             existing.setEmail(hotel.getEmail());
             existing.setDescription(hotel.getDescription());
+            if (hotel.getImageUrl() != null) existing.setImageUrl(hotel.getImageUrl());
+            if (hotel.getVideoUrl() != null) existing.setVideoUrl(hotel.getVideoUrl());
             return hotelRepository.save(existing);
         });
     }
@@ -57,5 +59,21 @@ public class HotelServiceImpl implements HotelService {
     @Override
     public void delete(Long id) {
         hotelRepository.deleteById(id);
+    }
+
+    @Override
+    public Optional<Hotel> updateImageUrl(Long id, String imageUrl) {
+        return hotelRepository.findById(id).map(existing -> {
+            existing.setImageUrl(imageUrl);
+            return hotelRepository.save(existing);
+        });
+    }
+
+    @Override
+    public Optional<Hotel> updateVideoUrl(Long id, String videoUrl) {
+        return hotelRepository.findById(id).map(existing -> {
+            existing.setVideoUrl(videoUrl);
+            return hotelRepository.save(existing);
+        });
     }
 }

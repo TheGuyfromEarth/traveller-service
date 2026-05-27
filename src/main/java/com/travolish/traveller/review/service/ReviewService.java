@@ -34,6 +34,8 @@ public interface ReviewService {
 
     ReviewModeratorDTO flagReview(Long reviewId);
 
+    ReviewModeratorDTO escalateReview(Long reviewId);
+
     Page<ReviewModeratorDTO> getPendingReviews(Pageable pageable);
 
     Page<ReviewModeratorDTO> getFlaggedReviews(Pageable pageable);

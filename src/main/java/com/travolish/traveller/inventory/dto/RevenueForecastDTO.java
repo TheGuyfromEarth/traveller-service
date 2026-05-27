@@ -18,7 +18,10 @@ public class RevenueForecastDTO {
     private LocalDate endDate;
     private Double totalRevenue;
     private Double averageDailyRevenue;
-    private Double estimatedRevenue;
-    private Double revenueTrend; // Percentage change
+    private Double estimatedRevenue;   // RevPAR (revenue per available room night)
+    private Double revenueTrend;       // kept for compatibility — same value as revenueGrowth
+    private Double revenueGrowth;      // % change in total revenue vs prior period
+    private Double adrChange;          // % change in ADR vs prior period
+    private Double revParChange;       // % change in RevPAR vs prior period
     private List<InventoryForecastDTO> dailyForecasts;
 }

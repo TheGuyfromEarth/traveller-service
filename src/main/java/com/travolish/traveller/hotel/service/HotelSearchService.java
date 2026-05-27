@@ -50,7 +50,8 @@ public class HotelSearchService {
     }
 
     private Specification<Hotel> buildSpecification(HotelSearchRequest searchRequest) {
-        return HotelSpecification.withCountry(searchRequest.getCountry())
+        return HotelSpecification.withQuery(searchRequest.getQuery())
+                .and(HotelSpecification.withCountry(searchRequest.getCountry()))
                 .and(HotelSpecification.withCity(searchRequest.getCity()))
                 .and(HotelSpecification.withName(searchRequest.getName()))
                 .and(HotelSpecification.withMinRating(searchRequest.getMinRating()))
@@ -69,6 +70,8 @@ public class HotelSearchService {
                 .phone(hotel.getPhone())
                 .email(hotel.getEmail())
                 .description(hotel.getDescription())
+                .latitude(hotel.getLatitude())
+                .longitude(hotel.getLongitude())
                 .createdAt(hotel.getCreatedAt())
                 .build();
     }

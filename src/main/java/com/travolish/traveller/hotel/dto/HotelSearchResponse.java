@@ -23,6 +23,8 @@ public class HotelSearchResponse {
     private String phone;
     private String email;
     private String description;
+    private Double latitude;
+    private Double longitude;
     private OffsetDateTime createdAt;
 
 }

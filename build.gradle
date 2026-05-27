@@ -29,10 +29,14 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0'
 	
 	// Supabase Storage (replacing S3)
 	implementation 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
+
+	// Google Cloud Storage (GCS) — for signed upload URLs and profile image storage
+	implementation 'com.google.cloud:google-cloud-storage:2.43.1'
 	
 	// Email notification support
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
@@ -73,6 +77,24 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// Load .env file into all JavaExec tasks (bootRun + IntelliJ main-class runner)
+def loadDotEnv = { task ->
+	def envFile = file("${projectDir}/.env")
+	if (envFile.exists()) {
+		envFile.readLines().each { line ->
+			line = line.trim()
+			if (line && !line.startsWith('#') && line.contains('=')) {
+				def idx = line.indexOf('=')
+				def key = line.substring(0, idx).trim()
+				def value = line.substring(idx + 1).trim()
+				task.environment(key, value)
+			}
+		}
+	}
+}
+
+tasks.withType(JavaExec).configureEach { loadDotEnv(it) }
 springBoot {
 	mainClass = 'com.travolish.traveller.TravellerServiceApplication'
 }

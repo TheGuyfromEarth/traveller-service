@@ -41,6 +41,14 @@ public class Hotel {
     @Column(length = 2000)
     private String description;
 
+    private String imageUrl;
+
+    private String videoUrl;
+
+    private Double latitude;
+
+    private Double longitude;
+
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     @OneToMany(mappedBy = "hotelId", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

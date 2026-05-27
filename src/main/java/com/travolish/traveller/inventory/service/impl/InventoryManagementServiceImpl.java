@@ -235,7 +235,6 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
     @Override
     public RevenueForecastDTO generateRevenueForecast(Long hotelId, LocalDate startDate, LocalDate endDate) {
         List<InventoryForecastDTO> dailyForecasts = new ArrayList<>();
-
         LocalDate current = startDate;
         while (!current.isAfter(endDate)) {
             Double dayRevenue = bookingRepository.getTotalRevenueForHotelInPeriod(
@@ -247,20 +246,56 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             current = current.plusDays(1);
         }
 
-        Double totalRevenue = bookingRepository.getTotalRevenueForHotelInPeriod(
-            hotelId, startDate, endDate.plusDays(1));
-        double total = totalRevenue != null ? totalRevenue : 0.0;
         long days = ChronoUnit.DAYS.between(startDate, endDate) + 1;
-        double avgDailyRevenue = days > 0 ? total / days : 0.0;
+        double[] curr = computePeriodMetrics(hotelId, startDate, endDate);
+        double avgDailyRevenue = days > 0 ? curr[0] / days : 0.0;
+
+        LocalDate priorStart = startDate.minusDays(days);
+        LocalDate priorEnd = startDate.minusDays(1);
+        double[] prior = computePeriodMetrics(hotelId, priorStart, priorEnd);
+
+        Double revenueGrowth = pctChange(prior[0], curr[0]);
+        Double adrChange = pctChange(prior[1], curr[1]);
+        Double revParChange = pctChange(prior[2], curr[2]);
 
         return RevenueForecastDTO.builder()
             .hotelId(hotelId)
             .startDate(startDate)
             .endDate(endDate)
-            .totalRevenue(total)
+            .totalRevenue(curr[0])
             .averageDailyRevenue(avgDailyRevenue)
+            .estimatedRevenue(curr[2])
+            .revenueTrend(revenueGrowth)
+            .revenueGrowth(revenueGrowth)
+            .adrChange(adrChange)
+            .revParChange(revParChange)
             .dailyForecasts(dailyForecasts)
             .build();
+    }
+
+    // Returns [revenue, adr, revpar] for the given period.
+    // ADR  = revenue / total room-nights sold (bookedRooms across all availability records)
+    // RevPAR = revenue / total room-nights available (totalRooms across all availability records)
+    private double[] computePeriodMetrics(Long hotelId, LocalDate start, LocalDate end) {
+        Double revenue = bookingRepository.getTotalRevenueForHotelInPeriod(hotelId, start, end.plusDays(1));
+        double rev = revenue != null ? revenue : 0.0;
+
+        List<RoomAvailability> records = availabilityRepository
+            .findByHotelIdAndAvailabilityDateBetween(hotelId, start, end);
+
+        long bookedNights = records.stream().mapToLong(RoomAvailability::getBookedRooms).sum();
+        long totalNights  = records.stream().mapToLong(RoomAvailability::getTotalRooms).sum();
+
+        double adr    = bookedNights > 0 ? rev / bookedNights : 0.0;
+        double revpar = totalNights  > 0 ? rev / totalNights  : 0.0;
+
+        return new double[]{rev, adr, revpar};
+    }
+
+    // Returns null when prior is zero to avoid misleading infinity/division-by-zero results.
+    private Double pctChange(double prior, double current) {
+        if (prior == 0.0) return null;
+        return (current - prior) / prior * 100.0;
     }
 
     @Override

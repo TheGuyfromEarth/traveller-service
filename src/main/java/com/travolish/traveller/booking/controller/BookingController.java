@@ -122,8 +122,8 @@ public class BookingController {
      * POST /api/bookings/1/cancel
      */
     @PostMapping("/{id}/cancel")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void cancelBooking(@PathVariable Long id) {
-        bookingService.cancelBooking(id);
+    public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+        boolean found = bookingService.cancelBooking(id);
+        return found ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 }

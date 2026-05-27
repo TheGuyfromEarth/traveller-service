@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class HotelSearchRequest {
 
+    private String query;   // OR-matches hotel name and city; overrides name/city when set
     private String country;
     private String city;
     private String name;

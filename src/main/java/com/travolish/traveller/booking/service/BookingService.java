@@ -44,9 +44,11 @@ public interface BookingService {
     List<Booking> findConfirmedBookingsInDateRange(Long roomId, LocalDate checkInDate, LocalDate checkOutDate);
 
     /**
-     * Cancel a booking by ID
+     * Cancel a booking by ID.
+     * Returns {@code true} if the booking was found and cancelled,
+     * {@code false} if no booking exists for the given ID.
      */
-    void cancelBooking(Long bookingId);
+    boolean cancelBooking(Long bookingId);
 
     /**
      * Get all bookings for a specific guest email

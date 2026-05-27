@@ -12,4 +12,6 @@ public interface HotelService {
     Hotel create(Hotel hotel);
     Optional<Hotel> update(Long id, Hotel hotel);
     void delete(Long id);
+    Optional<Hotel> updateImageUrl(Long id, String imageUrl);
+    Optional<Hotel> updateVideoUrl(Long id, String videoUrl);
 }

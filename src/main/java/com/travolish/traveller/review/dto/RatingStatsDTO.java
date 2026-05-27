@@ -19,5 +19,5 @@ public class RatingStatsDTO {
     private Long threeStars;
     private Long fourStars;
     private Long fiveStars;
-    private Double percentageRating; // Percentage of 5-star ratings
+    private Double fiveStarPercentage; // Percentage of reviews that are 5-star
 }

@@ -10,6 +10,9 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
@@ -22,6 +25,9 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(unique = true)
+    private String supabaseId;
     
     private String firstName;
     private String lastName;
@@ -40,4 +46,12 @@ public class User {
     private String providerId;
     // S3 object key for profile image
     private String imageKey;
+
+    // Admin fields — nullable; null means GUEST / ACTIVE
+    private String role;    // ADMIN, HOST, GUEST
+    private String status;  // ACTIVE, SUSPENDED, PENDING, BLACKLISTED
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
 }

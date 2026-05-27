@@ -206,7 +206,7 @@ public class ReviewController {
 
     /**
      * Flag a review for further review
-     * 
+     *
      * @param reviewId Review ID
      * @return Flagged review
      */
@@ -214,6 +214,18 @@ public class ReviewController {
     public ResponseEntity<ReviewModeratorDTO> flagReview(@PathVariable Long reviewId) {
         ReviewModeratorDTO flaggedReview = reviewService.flagReview(reviewId);
         return ResponseEntity.ok(flaggedReview);
+    }
+
+    /**
+     * Escalate a review to senior review team
+     *
+     * @param reviewId Review ID
+     * @return Escalated review
+     */
+    @PostMapping("/{reviewId}/escalate")
+    public ResponseEntity<ReviewModeratorDTO> escalateReview(@PathVariable Long reviewId) {
+        ReviewModeratorDTO escalatedReview = reviewService.escalateReview(reviewId);
+        return ResponseEntity.ok(escalatedReview);
     }
 
     /**

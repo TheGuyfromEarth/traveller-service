@@ -51,17 +51,32 @@ public class NotificationService {
     }
     
     /**
-     * Send notification via email or SMS
+     * Fire-and-forget async wrapper used by internal callers (booking, user creation).
+     * Failures are logged but never propagated to the calling thread.
      */
     @Async
+    public void sendNotificationAsync(SendNotificationRequest request) {
+        try {
+            sendNotification(request);
+        } catch (Exception e) {
+            log.warn("Async notification failed: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Send notification via email or SMS — synchronous, returns the saved DTO.
+     * Use sendNotificationAsync() for fire-and-forget callers.
+     */
     public NotificationDTO sendNotification(SendNotificationRequest request) {
         try {
-            // Check user preferences
-            UserNotificationPreference preference = getOrCreateUserPreference(request.getUserId());
-            if (!isNotificationAllowed(preference, request.getType())) {
-                log.info("Notification blocked by user preferences for userId: {}, type: {}", 
-                    request.getUserId(), request.getType());
-                return null;
+            // Check user preferences (skip when userId is unknown — e.g. guest bookings)
+            if (request.getUserId() != null) {
+                UserNotificationPreference preference = getOrCreateUserPreference(request.getUserId());
+                if (!isNotificationAllowed(preference, request.getType())) {
+                    log.info("Notification blocked by user preferences for userId: {}, type: {}",
+                        request.getUserId(), request.getType());
+                    return null;
+                }
             }
             
             // Create notification entity

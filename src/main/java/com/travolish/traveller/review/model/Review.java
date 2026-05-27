@@ -80,7 +80,8 @@ public class Review {
         PENDING,      // Awaiting moderation
         APPROVED,     // Approved and visible
         REJECTED,     // Rejected by moderator
-        FLAGGED       // Flagged for review
+        FLAGGED,      // Flagged for review
+        ESCALATED     // Escalated to senior review
     }
 
     public enum ReviewType {
