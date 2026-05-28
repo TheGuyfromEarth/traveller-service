@@ -17,8 +17,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -68,9 +72,60 @@ public class AdminDashboardController {
                 .totalBookings(totalBookings)
                 .confirmedBookings(confirmedBookings)
                 .bookingTrend(trend)
+                .recentActivity(buildRecentActivity())
                 .build();
 
         return ResponseEntity.ok(stats);
+    }
+
+    private List<AdminDashboardStatsDTO.ActivityItemDTO> buildRecentActivity() {
+        record Entry(String title, String meta, Instant at) {}
+        List<Entry> entries = new ArrayList<>();
+
+        List<HotelChangeRequest> processed = new ArrayList<>();
+        processed.addAll(hotelChangeRequestRepository.findByStatus(HotelChangeRequest.RequestStatus.APPROVED));
+        processed.addAll(hotelChangeRequestRepository.findByStatus(HotelChangeRequest.RequestStatus.REJECTED));
+        for (HotelChangeRequest req : processed) {
+            if (req.getProcessedAt() == null) continue;
+            String title = req.getStatus() == HotelChangeRequest.RequestStatus.APPROVED
+                    ? "Listing approved" : "Listing rejected";
+            String meta = req.getName() != null ? req.getName() : "Hotel #" + req.getHotelId();
+            entries.add(new Entry(title, meta, req.getProcessedAt().toInstant()));
+        }
+
+        List<com.travolish.traveller.kyc.entity.HostKYC> kycRecords = new ArrayList<>();
+        kycRecords.addAll(hostKYCRepository.findByKYCStatus("VERIFIED"));
+        kycRecords.addAll(hostKYCRepository.findByKYCStatus("REJECTED"));
+        for (com.travolish.traveller.kyc.entity.HostKYC kyc : kycRecords) {
+            if (kyc.getUpdatedAt() == null) continue;
+            String title = "VERIFIED".equals(kyc.getKycStatus()) ? "KYC verified" : "KYC rejected";
+            String first = kyc.getFirstName() != null ? kyc.getFirstName() : "";
+            String last = kyc.getLastName() != null ? kyc.getLastName() : "";
+            String name = (first + " " + last).trim();
+            String meta = name.isEmpty() ? "Host #" + kyc.getHostId() : name;
+            entries.add(new Entry(title, meta, kyc.getUpdatedAt().toInstant(ZoneOffset.UTC)));
+        }
+
+        Instant now = Instant.now();
+        return entries.stream()
+                .sorted(Comparator.comparing(Entry::at).reversed())
+                .limit(8)
+                .map(e -> AdminDashboardStatsDTO.ActivityItemDTO.builder()
+                        .title(e.title())
+                        .meta(e.meta())
+                        .time(formatTimeAgo(e.at(), now))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private static String formatTimeAgo(Instant then, Instant now) {
+        long minutes = ChronoUnit.MINUTES.between(then, now);
+        if (minutes < 1) return "just now";
+        if (minutes < 60) return minutes + " min ago";
+        long hours = ChronoUnit.HOURS.between(then, now);
+        if (hours < 24) return hours + " hr ago";
+        long days = ChronoUnit.DAYS.between(then, now);
+        return days + " day" + (days == 1 ? "" : "s") + " ago";
     }
 
     private List<AdminDashboardStatsDTO.DayTrendDTO> buildWeekTrend(List<Booking> bookings) {

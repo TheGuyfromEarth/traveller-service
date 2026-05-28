@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import java.util.List;
 @RequestMapping("/api/admin/kyc")
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class AdminKYCController {
 
     private final HostKYCRepository hostKYCRepository;
@@ -41,6 +43,7 @@ public class AdminKYCController {
         return ResponseEntity.ok(dtos);
     }
 
+    @Transactional
     @PostMapping("/{id}/approve")
     public ResponseEntity<HostKYCDTO> approveKYC(@PathVariable Long id) {
         return hostKYCRepository.findById(id).map(kyc -> {
@@ -52,6 +55,7 @@ public class AdminKYCController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @Transactional
     @PostMapping("/{id}/reject")
     public ResponseEntity<HostKYCDTO> rejectKYC(
             @PathVariable Long id,
@@ -66,6 +70,7 @@ public class AdminKYCController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @Transactional
     @PostMapping("/{id}/request-resubmit")
     public ResponseEntity<HostKYCDTO> requestResubmit(
             @PathVariable Long id,

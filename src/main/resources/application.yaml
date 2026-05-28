@@ -2,8 +2,8 @@ spring:
   application:
     name: traveller-service
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USER}
+    url: jdbc:postgresql://db.hizprgnbtsomiucqwull.supabase.co:5432/postgres?sslmode=require
+    username: postgres
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
@@ -24,12 +24,12 @@ spring:
     init:
       mode: never
   s3:
-    bucket: ${S3_BUCKET:travolish-bucket}
-    region: ${AWS_REGION:us-east-1}
+    bucket: travolish-bucket
+    region: us-east-1
   mail:
     host: smtp-relay.brevo.com
     port: 587
-    username: ${BREVO_SMTP_LOGIN}
+    username: ac6e86001@smtp-brevo.com
     password: ${BREVO_SMTP_KEY}
     properties:
       mail:
@@ -41,8 +41,8 @@ spring:
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
-    from: ${MAIL_FROM:noreply@travolish.com}
-    from-name: ${MAIL_FROM_NAME:Travolish Hotels}
+    from: travolish.dev@gmail.com
+    from-name: Travolish Hotels
   task:
     scheduling:
       pool:
@@ -54,23 +54,23 @@ spring:
 
 # Google Cloud Storage
 gcs:
-  bucket-name: ${GCS_BUCKET_NAME:travolish-avatars}
+  bucket-name: travolish-avatars
 
 # Supabase Storage (database + file storage — auth handled by Google directly)
 supabase:
-  url: ${SUPABASE_URL}
+  url: https://hizprgnbtsomiucqwull.supabase.co
   api-key: ${SUPABASE_API_KEY}
-  bucket-name: ${SUPABASE_BUCKET_NAME:travolish-bucket}
+  bucket-name: travolish-bucket
 
 # Google OAuth2
 google:
   oauth2:
-    client-id: ${GOOGLE_CLIENT_ID}
-    verify-signature: ${GOOGLE_VERIFY_SIGNATURE:true}
+    client-id: 72512403565-42ic0ku6i3jrnpmle8cgc2sgcppvbsc0.apps.googleusercontent.com
+    verify-signature: true
 
 # JWT — tokens issued by this service after Google sign-in
 jwt:
-  secret: ${JWT_SECRET:travolish-secret-key-for-oauth2-authentication-tokens-please-change-in-production}
+  secret: ${JWT_SECRET}
   expiration: 3600000
   refresh:
     expiration: 604800000
@@ -85,8 +85,8 @@ apple:
 
 # SMS configuration
 sms:
-  enabled: ${SMS_ENABLED:false}
-  provider: ${SMS_PROVIDER:mock}
+  enabled: false
+  provider: mock
   twilio:
     account-sid: ${TWILIO_ACCOUNT_SID:}
     auth-token: ${TWILIO_AUTH_TOKEN:}

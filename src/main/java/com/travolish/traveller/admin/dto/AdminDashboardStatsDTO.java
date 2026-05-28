@@ -22,6 +22,7 @@ public class AdminDashboardStatsDTO {
     private long confirmedBookings;
 
     private List<DayTrendDTO> bookingTrend;
+    private List<ActivityItemDTO> recentActivity;
 
     @Data
     @NoArgsConstructor
@@ -31,5 +32,15 @@ public class AdminDashboardStatsDTO {
         private String label;
         private long bookings;
         private double revenue;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ActivityItemDTO {
+        private String title;
+        private String meta;
+        private String time;
     }
 }
