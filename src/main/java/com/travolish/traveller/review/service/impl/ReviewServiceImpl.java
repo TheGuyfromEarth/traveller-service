@@ -17,6 +17,12 @@ import com.travolish.traveller.review.model.Review.ReviewStatus;
 import com.travolish.traveller.review.model.Review.ReviewType;
 import com.travolish.traveller.review.repository.ReviewRepository;
 import com.travolish.traveller.review.service.ReviewService;
+import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.notifications.dto.SendNotificationRequest;
+import com.travolish.traveller.notifications.entity.NotificationChannel;
+import com.travolish.traveller.notifications.entity.NotificationType;
+import com.travolish.traveller.notifications.service.NotificationService;
+import com.travolish.traveller.user.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,6 +31,9 @@ import lombok.RequiredArgsConstructor;
 public class ReviewServiceImpl implements ReviewService {
 
     private final ReviewRepository reviewRepository;
+    private final HotelRepository hotelRepository;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     // ==================== Review Submission ====================
 
@@ -183,7 +192,49 @@ public class ReviewServiceImpl implements ReviewService {
         review.setReviewedAt(OffsetDateTime.now());
 
         Review savedReview = reviewRepository.save(review);
+
+        // Recompute hotel rating from all approved HOTEL reviews
+        if (review.getHotelId() != null) {
+            refreshHotelRating(review.getHotelId());
+        }
+
+        // Notify the reviewer
+        notifyReviewStatus(savedReview, "Your review has been approved and is now live. Thank you for your feedback!");
+
         return convertToModeratorDTO(savedReview);
+    }
+
+    /** Sends an in-app + email notification to the review author about their review status. */
+    private void notifyReviewStatus(Review review, String message) {
+        try {
+            userRepository.findById(review.getUserId()).ifPresent(user -> {
+                SendNotificationRequest req = new SendNotificationRequest();
+                req.setUserId(user.getId());
+                req.setType(NotificationType.BOOKING_CONFIRMATION); // reuse as generic notification
+                req.setChannel(NotificationChannel.EMAIL);
+                req.setRecipientEmail(user.getEmail());
+                req.setSubject("Update on your Travolish review");
+                req.setMessage("Hi " + (user.getFirstName() != null ? user.getFirstName() : "there") + ",\n\n" + message + "\n\n— The Travolish Team");
+                req.setSendImmediately(true);
+                notificationService.sendNotificationAsync(req);
+            });
+        } catch (Exception e) {
+            // Non-critical
+        }
+    }
+
+    /** Recalculates and persists hotel.rating and hotel.reviewCount from approved reviews. */
+    private void refreshHotelRating(Long hotelId) {
+        List<Review> approved = reviewRepository.findAllHotelReviews(hotelId).stream()
+            .filter(r -> ReviewStatus.APPROVED == r.getStatus())
+            .toList();
+        if (approved.isEmpty()) return;
+
+        double avg = approved.stream().mapToInt(Review::getRating).average().orElse(0.0);
+        hotelRepository.findById(hotelId).ifPresent(hotel -> {
+            hotel.setRating(Math.round(avg * 10.0) / 10.0);
+            hotelRepository.save(hotel);
+        });
     }
 
     @Override
@@ -201,6 +252,7 @@ public class ReviewServiceImpl implements ReviewService {
         review.setReviewedAt(OffsetDateTime.now());
 
         Review savedReview = reviewRepository.save(review);
+        notifyReviewStatus(savedReview, "Your review was not published. Reason: " + reason + ". You may edit and resubmit from the Reviews section.");
         return convertToModeratorDTO(savedReview);
     }
 

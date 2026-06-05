@@ -82,7 +82,7 @@ public class ChatService {
     public MessageDTO sendMessage(Long conversationId, Long senderId, Long receiverId, String messageText) {
         Conversation conversation = conversationRepository.findById(conversationId)
             .orElseThrow(() -> new RuntimeException("Conversation not found"));
-        
+
         Message message = new Message();
         message.setConversation(conversation);
         message.setSenderId(senderId);
@@ -90,23 +90,70 @@ public class ChatService {
         message.setMessageText(messageText);
         message.setIsRead(false);
         message.setIsDeleted(false);
-        
+
         message = messageRepository.save(message);
-        
+
         // Update conversation's last message info
         conversation.setLastMessageId(message.getId());
         conversation.setLastMessageTime(LocalDateTime.now());
-        
+
         // Increment unread count for receiver
         if (receiverId.equals(conversation.getUserId1())) {
             conversation.setUser1UnreadCount(conversation.getUser1UnreadCount() + 1);
         } else {
             conversation.setUser2UnreadCount(conversation.getUser2UnreadCount() + 1);
         }
-        
+
         conversationRepository.save(conversation);
-        
+
+        // Auto-reply when the message is directed to the Travolish support user (id=4)
+        if (Long.valueOf(4L).equals(receiverId)) {
+            scheduleSupportAutoReply(conversation, receiverId, senderId, messageText);
+        }
+
         return modelMapper.map(message, MessageDTO.class);
+    }
+
+    /**
+     * Schedules a support auto-reply 500ms after the user's message using a background thread.
+     */
+    private void scheduleSupportAutoReply(Conversation conversation, Long supportUserId, Long guestUserId, String userText) {
+        new Thread(() -> {
+            try { Thread.sleep(800); } catch (InterruptedException ignored) {}
+            try {
+                String reply = buildSupportReply(userText);
+                Message autoMsg = new Message();
+                autoMsg.setConversation(conversation);
+                autoMsg.setSenderId(supportUserId);
+                autoMsg.setReceiverId(guestUserId);
+                autoMsg.setMessageText(reply);
+                autoMsg.setIsRead(false);
+                autoMsg.setIsDeleted(false);
+                messageRepository.save(autoMsg);
+                conversation.setLastMessageId(autoMsg.getId());
+                conversation.setLastMessageTime(LocalDateTime.now());
+                if (guestUserId.equals(conversation.getUserId1())) {
+                    conversation.setUser1UnreadCount(conversation.getUser1UnreadCount() + 1);
+                } else {
+                    conversation.setUser2UnreadCount(conversation.getUser2UnreadCount() + 1);
+                }
+                conversationRepository.save(conversation);
+            } catch (Exception e) {
+                // Non-critical — swallow silently
+            }
+        }).start();
+    }
+
+    private String buildSupportReply(String userText) {
+        String text = userText.toLowerCase();
+        if (text.contains("cancel")) return "Hi! I can help with cancellations. Please open the booking from your Trips page and tap 'Cancel booking'. Refunds are processed within 5–7 business days.";
+        if (text.contains("check-in") || text.contains("checkin") || text.contains("check in")) return "For check-in details, please review your booking confirmation or message your host directly through the Trips page. Most hosts share access instructions 24 hours before arrival.";
+        if (text.contains("refund")) return "Refunds are issued according to the property's cancellation policy. Once cancelled, funds typically return to your original payment method within 5–7 business days.";
+        if (text.contains("payment") || text.contains("charge") || text.contains("paid")) return "For payment queries, check your Transactions page for the full payment history. If you see an unexpected charge, please share your booking ID and we'll look into it.";
+        if (text.contains("host") || text.contains("contact")) return "You can message your host directly through the booking's chat thread on the Trips page. Hosts typically respond within a few hours.";
+        if (text.contains("review") || text.contains("rating")) return "You can leave a review for any completed stay from your Trips page. Reviews help other travellers and are published after a 48-hour window.";
+        if (text.contains("wifi") || text.contains("wi-fi") || text.contains("internet")) return "Wi-Fi details are usually in the host's check-in instructions or listed in the property amenities. Check your booking confirmation or message your host.";
+        return "Thanks for reaching out! Our support team will review your message shortly. For urgent matters, please check the Emergency section of the app. Typical response time: 2–4 hours.";
     }
     
     /**

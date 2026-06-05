@@ -24,6 +24,9 @@ public class Booking {
     @NotNull
     private Long hotelId;
 
+    // nullable — only set when the booker is an authenticated user
+    private Long userId;
+
     @NotNull
     private String guestName;
 

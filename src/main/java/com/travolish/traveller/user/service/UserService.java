@@ -77,18 +77,17 @@ public class UserService {
         User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
 
-        existingUser.setFirstName(userDTO.getFirstName());
-        existingUser.setLastName(userDTO.getLastName());
-        existingUser.setPreferredName(userDTO.getPreferredName());
-        existingUser.setEmail(userDTO.getEmail());
-        existingUser.setPhone(userDTO.getPhone());
-        existingUser.setCity(userDTO.getCity());
-        existingUser.setTimeZone(userDTO.getTimeZone());
-        existingUser.setTravelStyle(userDTO.getTravelStyle());
-        existingUser.setBio(userDTO.getBio());
-        if (userDTO.getAvatarUrl() != null) {
-            existingUser.setImageKey(userDTO.getAvatarUrl());
-        }
+        // Null-safe partial update — only overwrite fields that are explicitly provided
+        if (userDTO.getFirstName() != null)    existingUser.setFirstName(userDTO.getFirstName());
+        if (userDTO.getLastName() != null)     existingUser.setLastName(userDTO.getLastName());
+        if (userDTO.getPreferredName() != null) existingUser.setPreferredName(userDTO.getPreferredName());
+        if (userDTO.getEmail() != null)        existingUser.setEmail(userDTO.getEmail());
+        if (userDTO.getPhone() != null)        existingUser.setPhone(userDTO.getPhone());
+        if (userDTO.getCity() != null)         existingUser.setCity(userDTO.getCity());
+        if (userDTO.getTimeZone() != null)     existingUser.setTimeZone(userDTO.getTimeZone());
+        if (userDTO.getTravelStyle() != null)  existingUser.setTravelStyle(userDTO.getTravelStyle());
+        if (userDTO.getBio() != null)          existingUser.setBio(userDTO.getBio());
+        if (userDTO.getAvatarUrl() != null)    existingUser.setImageKey(userDTO.getAvatarUrl());
         // Don't update password here, create a separate endpoint for password update
 
         User updatedUser = userRepository.save(existingUser);

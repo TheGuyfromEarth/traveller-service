@@ -19,10 +19,12 @@ import com.travolish.traveller.inventory.exception.OverbookingException;
 import com.travolish.traveller.inventory.service.AvailabilityService;
 import com.travolish.traveller.inventory.service.SeasonalPricingService;
 import com.travolish.traveller.inventory.service.DynamicPricingService;
+import com.travolish.traveller.hotel.repository.HotelRepository;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
 import com.travolish.traveller.notifications.entity.NotificationChannel;
 import com.travolish.traveller.notifications.entity.NotificationType;
 import com.travolish.traveller.notifications.service.NotificationService;
+import com.travolish.traveller.user.repository.UserRepository;
 
 @Service
 @Slf4j
@@ -33,17 +35,23 @@ public class BookingServiceImpl implements BookingService {
     private final SeasonalPricingService seasonalPricingService;
     private final DynamicPricingService dynamicPricingService;
     private final NotificationService notificationService;
+    private final HotelRepository hotelRepository;
+    private final UserRepository userRepository;
 
     public BookingServiceImpl(BookingRepository bookingRepository,
                            AvailabilityService availabilityService,
                            SeasonalPricingService seasonalPricingService,
                            DynamicPricingService dynamicPricingService,
-                           NotificationService notificationService) {
+                           NotificationService notificationService,
+                           HotelRepository hotelRepository,
+                           UserRepository userRepository) {
         this.bookingRepository = bookingRepository;
         this.availabilityService = availabilityService;
         this.seasonalPricingService = seasonalPricingService;
         this.dynamicPricingService = dynamicPricingService;
         this.notificationService = notificationService;
+        this.hotelRepository = hotelRepository;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -123,6 +131,7 @@ public class BookingServiceImpl implements BookingService {
         // 5. Update availability for all dates in range
         availabilityService.bookRoom(
             booking.getRoomId(),
+            booking.getHotelId(),
             booking.getCheckInDate(),
             booking.getCheckOutDate()
         );
@@ -257,39 +266,109 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.findByGuestEmailIgnoreCase(guestEmail);
     }
 
+    @Override
+    public List<Booking> findByUserId(Long userId) {
+        return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
     private void notifyBookingConfirmation(Booking booking) {
-        SendNotificationRequest req = new SendNotificationRequest();
-        req.setType(NotificationType.BOOKING_CONFIRMATION);
-        req.setChannel(NotificationChannel.EMAIL);
-        req.setRecipientEmail(booking.getGuestEmail());
-        req.setBookingId(booking.getId());
-        req.setHotelId(booking.getHotelId());
-        req.setSendImmediately(true);
-        req.setSubject("Booking Confirmed – Check-in " + booking.getCheckInDate());
-        req.setMessage("Hi " + booking.getGuestName() + ",\n\n"
+        // 1. Notify the guest
+        SendNotificationRequest guestReq = new SendNotificationRequest();
+        guestReq.setType(NotificationType.BOOKING_CONFIRMATION);
+        guestReq.setChannel(NotificationChannel.EMAIL);
+        guestReq.setUserId(booking.getUserId());
+        guestReq.setRecipientEmail(booking.getGuestEmail());
+        guestReq.setBookingId(booking.getId());
+        guestReq.setHotelId(booking.getHotelId());
+        guestReq.setSendImmediately(true);
+        guestReq.setSubject("Booking Confirmed – Check-in " + booking.getCheckInDate());
+        guestReq.setMessage("Hi " + booking.getGuestName() + ",\n\n"
                 + "Your booking has been confirmed.\n\n"
                 + "Check-in:  " + booking.getCheckInDate() + "\n"
                 + "Check-out: " + booking.getCheckOutDate() + "\n"
-                + "Total:     $" + String.format("%.2f", booking.getTotalPrice()) + "\n\n"
+                + "Total:     ₹" + String.format("%.2f", booking.getTotalPrice()) + "\n\n"
                 + "We look forward to welcoming you!");
-        notificationService.sendNotificationAsync(req);
+        notificationService.sendNotificationAsync(guestReq);
+
+        // 2. Notify the host
+        notifyHostOfNewBooking(booking);
+    }
+
+    private void notifyHostOfNewBooking(Booking booking) {
+        try {
+            hotelRepository.findById(booking.getHotelId()).ifPresent(hotel -> {
+                if (hotel.getHostId() == null) return;
+                userRepository.findById(hotel.getHostId()).ifPresent(host -> {
+                    SendNotificationRequest hostReq = new SendNotificationRequest();
+                    hostReq.setType(NotificationType.BOOKING_CONFIRMATION);
+                    hostReq.setChannel(NotificationChannel.EMAIL);
+                    hostReq.setUserId(host.getId());
+                    hostReq.setRecipientEmail(host.getEmail());
+                    hostReq.setBookingId(booking.getId());
+                    hostReq.setHotelId(booking.getHotelId());
+                    hostReq.setSendImmediately(true);
+                    hostReq.setSubject("New booking for " + hotel.getName());
+                    hostReq.setMessage("Hi " + (host.getFirstName() != null ? host.getFirstName() : "Host") + ",\n\n"
+                            + "You have a new booking for " + hotel.getName() + ".\n\n"
+                            + "Guest:     " + booking.getGuestName() + "\n"
+                            + "Email:     " + booking.getGuestEmail() + "\n"
+                            + "Check-in:  " + booking.getCheckInDate() + "\n"
+                            + "Check-out: " + booking.getCheckOutDate() + "\n"
+                            + "Total:     ₹" + String.format("%.2f", booking.getTotalPrice()) + "\n\n"
+                            + "Log in to your host dashboard to confirm or manage this booking.\n\n"
+                            + "— The Travolish Team");
+                    notificationService.sendNotificationAsync(hostReq);
+                });
+            });
+        } catch (Exception e) {
+            log.warn("Failed to send host booking notification for booking {}: {}", booking.getId(), e.getMessage());
+        }
     }
 
     private void notifyBookingCancellation(Booking booking) {
-        SendNotificationRequest req = new SendNotificationRequest();
-        req.setType(NotificationType.BOOKING_CANCELLATION);
-        req.setChannel(NotificationChannel.EMAIL);
-        req.setRecipientEmail(booking.getGuestEmail());
-        req.setBookingId(booking.getId());
-        req.setHotelId(booking.getHotelId());
-        req.setSendImmediately(true);
-        req.setSubject("Booking Cancellation Confirmed");
-        req.setMessage("Hi " + booking.getGuestName() + ",\n\n"
+        // 1. Notify the guest
+        SendNotificationRequest guestReq = new SendNotificationRequest();
+        guestReq.setType(NotificationType.BOOKING_CANCELLATION);
+        guestReq.setChannel(NotificationChannel.EMAIL);
+        guestReq.setRecipientEmail(booking.getGuestEmail());
+        guestReq.setBookingId(booking.getId());
+        guestReq.setHotelId(booking.getHotelId());
+        guestReq.setSendImmediately(true);
+        guestReq.setSubject("Booking Cancellation Confirmed");
+        guestReq.setMessage("Hi " + booking.getGuestName() + ",\n\n"
                 + "Your booking has been cancelled.\n\n"
                 + "Original check-in:  " + booking.getCheckInDate() + "\n"
                 + "Original check-out: " + booking.getCheckOutDate() + "\n\n"
                 + "If you did not request this cancellation, please contact support.");
-        notificationService.sendNotificationAsync(req);
+        notificationService.sendNotificationAsync(guestReq);
+
+        // 2. Notify the host of the cancellation
+        try {
+            hotelRepository.findById(booking.getHotelId()).ifPresent(hotel -> {
+                if (hotel.getHostId() == null) return;
+                userRepository.findById(hotel.getHostId()).ifPresent(host -> {
+                    SendNotificationRequest hostReq = new SendNotificationRequest();
+                    hostReq.setType(NotificationType.BOOKING_CANCELLATION);
+                    hostReq.setChannel(NotificationChannel.EMAIL);
+                    hostReq.setUserId(host.getId());
+                    hostReq.setRecipientEmail(host.getEmail());
+                    hostReq.setBookingId(booking.getId());
+                    hostReq.setHotelId(booking.getHotelId());
+                    hostReq.setSendImmediately(true);
+                    hostReq.setSubject("Booking cancelled for " + hotel.getName());
+                    hostReq.setMessage("Hi " + (host.getFirstName() != null ? host.getFirstName() : "Host") + ",\n\n"
+                            + "A booking for " + hotel.getName() + " has been cancelled.\n\n"
+                            + "Guest:               " + booking.getGuestName() + "\n"
+                            + "Original check-in:   " + booking.getCheckInDate() + "\n"
+                            + "Original check-out:  " + booking.getCheckOutDate() + "\n\n"
+                            + "The dates are now available again for new bookings.\n\n"
+                            + "— The Travolish Team");
+                    notificationService.sendNotificationAsync(hostReq);
+                });
+            });
+        } catch (Exception e) {
+            log.warn("Failed to send host cancellation notification for booking {}: {}", booking.getId(), e.getMessage());
+        }
     }
 
     @Override

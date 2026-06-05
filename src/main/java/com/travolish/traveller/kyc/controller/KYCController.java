@@ -195,6 +195,24 @@ public class KYCController {
         }
     }
 
+    // ── Delete bank account ──────────────────────────────────────────────────
+    @DeleteMapping("/bank/{bankAccountId}")
+    public ResponseEntity<Void> deleteBankAccount(
+            @PathVariable Long bankAccountId,
+            @RequestParam(required = false) Long hostId,
+            Authentication authentication) {
+        try {
+            Long resolved = resolveHostId(authentication, hostId);
+            kycService.deleteBankAccount(bankAccountId, resolved);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (Exception e) {
+            log.error("Error deleting bank account", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     // ── Overall verification status ──────────────────────────────────────────
     @GetMapping("/verification/status")
     public ResponseEntity<VerificationStatusDTO> getVerificationStatus(

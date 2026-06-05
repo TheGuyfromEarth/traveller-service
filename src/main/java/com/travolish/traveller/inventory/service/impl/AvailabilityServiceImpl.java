@@ -2,7 +2,9 @@ package com.travolish.traveller.inventory.service.impl;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -35,8 +37,9 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         List<RoomAvailability> availabilities = availabilityRepository
             .findByRoomIdAndAvailabilityDateBetween(roomId, checkInDate, checkOutDate.minusDays(1));
         
+        // No records = no explicit blocks = room is available by default
         if (availabilities.isEmpty()) {
-            return false;
+            return true;
         }
 
         return availabilities.stream().allMatch(RoomAvailability::isAvailableForBooking);
@@ -77,20 +80,31 @@ public class AvailabilityServiceImpl implements AvailabilityService {
 
     @Override
     @Transactional
-    public void bookRoom(Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
-        // Acquire row-level write locks on all affected dates before reading counts,
-        // so concurrent requests for the same room/dates are serialised here rather
-        // than racing past the caller's availability check (TOCTOU prevention).
-        List<RoomAvailability> availabilities = availabilityRepository
+    public void bookRoom(Long roomId, Long hotelId, LocalDate checkInDate, LocalDate checkOutDate) {
+        List<RoomAvailability> existing = availabilityRepository
             .findByRoomIdAndDateRangeWithLock(roomId, checkInDate, checkOutDate.minusDays(1));
 
-        boolean anyUnavailable = availabilities.isEmpty() ||
-            availabilities.stream().anyMatch(a -> !a.isAvailableForBooking());
-        if (anyUnavailable) {
-            throw OverbookingException.noRoomAvailable(roomId, null);
+        Map<LocalDate, RoomAvailability> byDate = existing.stream()
+            .collect(Collectors.toMap(RoomAvailability::getAvailabilityDate, a -> a));
+
+        List<RoomAvailability> toBook = new ArrayList<>();
+        for (LocalDate d = checkInDate; d.isBefore(checkOutDate); d = d.plusDays(1)) {
+            RoomAvailability rec = byDate.get(d);
+            if (rec == null) {
+                rec = new RoomAvailability();
+                rec.setRoomId(roomId);
+                rec.setHotelId(hotelId);
+                rec.setAvailabilityDate(d);
+                rec.setTotalRooms(1);
+                rec = availabilityRepository.save(rec);
+            }
+            if (!rec.isAvailableForBooking()) {
+                throw OverbookingException.noRoomAvailable(roomId, null);
+            }
+            toBook.add(rec);
         }
 
-        availabilities.forEach(availability -> {
+        toBook.forEach(availability -> {
             availability.addBooking();
             availabilityRepository.save(availability);
         });
@@ -110,20 +124,38 @@ public class AvailabilityServiceImpl implements AvailabilityService {
 
     @Override
     @Transactional
-    public void blockRoomsForMaintenance(Long roomId, LocalDate date, Integer count, String reason) {
+    public void blockRoomsForMaintenance(Long roomId, LocalDate date, Integer count, String reason, Long hotelId) {
         var availability = availabilityRepository.findByRoomIdAndAvailabilityDate(roomId, date)
-            .orElseThrow(() -> InsufficientAvailabilityException.roomNotAvailable(roomId));
-
+            .orElseGet(() -> availabilityRepository.save(
+                RoomAvailability.builder()
+                    .roomId(roomId)
+                    .hotelId(hotelId != null ? hotelId : 0L)
+                    .availabilityDate(date)
+                    .totalRooms(1)
+                    .bookedRooms(0)
+                    .availableRooms(1)
+                    .blockedRooms(0)
+                    .build()
+            ));
         availability.blockRooms(count, reason);
         availabilityRepository.save(availability);
     }
 
     @Override
     @Transactional
-    public void unblockRooms(Long roomId, LocalDate date, Integer count) {
+    public void unblockRooms(Long roomId, LocalDate date, Integer count, Long hotelId) {
         var availability = availabilityRepository.findByRoomIdAndAvailabilityDate(roomId, date)
-            .orElseThrow(() -> InsufficientAvailabilityException.roomNotAvailable(roomId));
-
+            .orElseGet(() -> availabilityRepository.save(
+                RoomAvailability.builder()
+                    .roomId(roomId)
+                    .hotelId(hotelId != null ? hotelId : 0L)
+                    .availabilityDate(date)
+                    .totalRooms(1)
+                    .bookedRooms(0)
+                    .availableRooms(1)
+                    .blockedRooms(0)
+                    .build()
+            ));
         availability.unblockRooms(count);
         availabilityRepository.save(availability);
     }

@@ -15,8 +15,16 @@ public interface HostDocumentRepository extends JpaRepository<HostDocument, Long
     @Query("SELECT hd FROM HostDocument hd WHERE hd.hostKYC.id = :hostKYCId")
     List<HostDocument> findByHostKYCId(@Param("hostKYCId") Long hostKYCId);
     
+    /** Returns all documents of a given type for a KYC record (handles legacy duplicates). */
     @Query("SELECT hd FROM HostDocument hd WHERE hd.hostKYC.id = :hostKYCId " +
-           "AND hd.documentType = :documentType")
+           "AND hd.documentType = :documentType ORDER BY hd.createdAt DESC")
+    List<com.travolish.traveller.kyc.entity.HostDocument> findAllByHostKYCIdAndDocumentType(
+        @Param("hostKYCId") Long hostKYCId,
+        @Param("documentType") String documentType
+    );
+
+    @Query("SELECT hd FROM HostDocument hd WHERE hd.hostKYC.id = :hostKYCId " +
+           "AND hd.documentType = :documentType ORDER BY hd.createdAt DESC")
     Optional<HostDocument> findByHostKYCIdAndDocumentType(
         @Param("hostKYCId") Long hostKYCId,
         @Param("documentType") String documentType

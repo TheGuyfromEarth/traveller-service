@@ -103,7 +103,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             throw InsufficientAvailabilityException.allDatesFullyBooked(roomId);
         }
 
-        availabilityService.bookRoom(roomId, checkInDate, checkOutDate);
+        availabilityService.bookRoom(roomId, hotelId, checkInDate, checkOutDate);
     }
 
     @Override
@@ -119,10 +119,11 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
         List<AvailabilityCheckDTO> roomDetails = availabilityService
             .getHotelOccupancyForDateRange(hotelId, date, date.plusDays(1));
 
+        Double occPct = occupancy.getOccupancyPercentage();
         String status = "GOOD";
-        if (occupancy.getOccupancyPercentage() > 85) {
+        if (occPct != null && occPct > 85) {
             status = "CRITICAL";
-        } else if (occupancy.getOccupancyPercentage() > 70) {
+        } else if (occPct != null && occPct > 70) {
             status = "WARNING";
         }
 
@@ -219,6 +220,38 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
         double avgOccupancy = availabilities.isEmpty() ? 0 : totalOccupancy / availabilities.size();
         double cancellationRate = totalBookings == 0 ? 0 : (totalCancellations * 100.0 / totalBookings);
 
+        // Length-of-stay segment breakdown — bookings that checked in during the period
+        List<com.travolish.traveller.booking.model.Booking> periodBookings =
+            bookingRepository.findByHotelId(hotelId).stream()
+                .filter(b -> b.getStatus() == com.travolish.traveller.booking.model.Booking.BookingStatus.CONFIRMED
+                          && !b.getCheckInDate().isBefore(startDate)
+                          && !b.getCheckInDate().isAfter(endDate))
+                .collect(java.util.stream.Collectors.toList());
+
+        List<OccupancyReportDTO.SegmentDTO> segments = new ArrayList<>();
+        if (!periodBookings.isEmpty()) {
+            long shortStays  = periodBookings.stream().filter(b -> ChronoUnit.DAYS.between(b.getCheckInDate(), b.getCheckOutDate()) <= 2).count();
+            long mediumStays = periodBookings.stream().filter(b -> { long n = ChronoUnit.DAYS.between(b.getCheckInDate(), b.getCheckOutDate()); return n >= 3 && n <= 6; }).count();
+            long longStays   = periodBookings.stream().filter(b -> ChronoUnit.DAYS.between(b.getCheckInDate(), b.getCheckOutDate()) >= 7).count();
+            long total = periodBookings.size();
+
+            segments.add(OccupancyReportDTO.SegmentDTO.builder()
+                .segmentName("Short stays (1–2 nights)")
+                .percentage(Math.round(shortStays * 1000.0 / total) / 10.0)
+                .trend(shortStays > 0 ? "Active" : "Low")
+                .build());
+            segments.add(OccupancyReportDTO.SegmentDTO.builder()
+                .segmentName("Medium stays (3–6 nights)")
+                .percentage(Math.round(mediumStays * 1000.0 / total) / 10.0)
+                .trend(mediumStays > 0 ? "Active" : "Low")
+                .build());
+            segments.add(OccupancyReportDTO.SegmentDTO.builder()
+                .segmentName("Long stays (7+ nights)")
+                .percentage(Math.round(longStays * 1000.0 / total) / 10.0)
+                .trend(longStays > 0 ? "Active" : "Low")
+                .build());
+        }
+
         return OccupancyReportDTO.builder()
             .hotelId(hotelId)
             .startDate(startDate)
@@ -229,6 +262,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             .totalBookings(totalBookings)
             .totalCancellations(totalCancellations)
             .cancellationRate(cancellationRate)
+            .segments(segments)
             .build();
     }
 
@@ -239,9 +273,12 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
         while (!current.isAfter(endDate)) {
             Double dayRevenue = bookingRepository.getTotalRevenueForHotelInPeriod(
                 hotelId, current, current.plusDays(1));
+            var occupancy = availabilityService.getHotelOccupancyOnDate(hotelId, current);
             var forecast = new InventoryForecastDTO();
             forecast.setDate(current);
-            forecast.setProjectedOccupancy((int)(dayRevenue != null ? dayRevenue : 0.0));
+            forecast.setProjectedOccupancy(occupancy.getBookedRooms());          // rooms booked, not revenue
+            forecast.setProjectedRevenue(dayRevenue);                             // daily revenue in correct field
+            forecast.setDemandLevel(getDemandLevelLabel(occupancy.getOccupancyPercentage()));
             dailyForecasts.add(forecast);
             current = current.plusDays(1);
         }

@@ -5,6 +5,10 @@ import com.travolish.traveller.pricing.dto.PricingSuggestionRequest;
 import com.travolish.traveller.pricing.entity.PricingSuggestion;
 import com.travolish.traveller.pricing.repository.PricingSuggestionRepository;
 import com.travolish.traveller.pricing.service.PricingAIService;
+import com.travolish.traveller.booking.repository.BookingRepository;
+import com.travolish.traveller.hotel.model.Room;
+import com.travolish.traveller.hotel.repository.RoomRepository;
+import com.travolish.traveller.inventory.repository.RoomAvailabilityRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -13,8 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +31,9 @@ import java.util.stream.Collectors;
 public class PricingAIServiceImpl implements PricingAIService {
 
     private final PricingSuggestionRepository pricingSuggestionRepository;
+    private final BookingRepository bookingRepository;
+    private final RoomRepository roomRepository;
+    private final RoomAvailabilityRepository availabilityRepository;
 
     @Override
     public PricingSuggestionDTO generateSuggestion(PricingSuggestionRequest request) {
@@ -35,7 +45,7 @@ public class PricingAIServiceImpl implements PricingAIService {
         BigDecimal priceChange = suggestedPrice.subtract(currentPrice);
         
         double confidenceScore = Math.random();
-        PricingSuggestion.SuggestionReason reason = determineSuggestionReason();
+        PricingSuggestion.SuggestionReason reason = determineSuggestionReason(request.getRoomId());
         PricingSuggestion.PricingTrend trend = determinePricingTrend(priceChange);
 
         PricingSuggestion suggestion = PricingSuggestion.builder()
@@ -132,22 +142,75 @@ public class PricingAIServiceImpl implements PricingAIService {
         return getSuggestionsForHotel(hotelId);
     }
 
+    /**
+     * Suggests a price using real booking history + occupancy data.
+     *
+     * Logic:
+     *  1. Get current base price from the room record.
+     *  2. Compute 30-day average occupancy for the room.
+     *  3. Apply demand-based multiplier:
+     *       > 80% occupancy → +20%  (high demand)
+     *       60–80%          → +10%
+     *       40–60%          → no change
+     *       20–40%          → -10%  (low demand)
+     *       < 20%           → -20%
+     *  4. Apply seasonal boost if it's within a known peak period.
+     */
     private BigDecimal calculateAISuggestedPrice(Long roomId) {
-        // Simulate AI calculation
-        return BigDecimal.valueOf(Math.random() * 500 + 50);
+        // Get room's base price
+        BigDecimal basePrice = roomRepository.findById(roomId)
+            .map(r -> BigDecimal.valueOf(r.getPricePerNight() != null ? r.getPricePerNight() : 0.0))
+            .orElse(BigDecimal.valueOf(100));
+
+        if (basePrice.compareTo(BigDecimal.ZERO) == 0) {
+            basePrice = BigDecimal.valueOf(100); // fallback
+        }
+
+        // 30-day average occupancy from availability records
+        LocalDate start = LocalDate.now();
+        LocalDate end = start.plusDays(30);
+        OptionalDouble avgOccupancy = availabilityRepository
+            .findByRoomIdAndAvailabilityDateBetween(roomId, start, end)
+            .stream()
+            .mapToDouble(a -> a.getOccupancyPercentage() != null ? a.getOccupancyPercentage() : 0.0)
+            .average();
+
+        double occupancy = avgOccupancy.orElse(50.0);
+
+        // Demand multiplier
+        double multiplier;
+        if (occupancy > 80) multiplier = 1.20;
+        else if (occupancy > 60) multiplier = 1.10;
+        else if (occupancy > 40) multiplier = 1.00;
+        else if (occupancy > 20) multiplier = 0.90;
+        else multiplier = 0.80;
+
+        // Seasonal boost for peak months (Dec–Jan, May–Jun in India)
+        int month = LocalDate.now().getMonthValue();
+        if (month == 12 || month == 1 || month == 5 || month == 6) multiplier += 0.05;
+
+        return basePrice.multiply(BigDecimal.valueOf(multiplier)).setScale(0, RoundingMode.HALF_UP);
     }
 
-    private PricingSuggestion.SuggestionReason determineSuggestionReason() {
-        PricingSuggestion.SuggestionReason[] reasons = PricingSuggestion.SuggestionReason.values();
-        return reasons[(int) (Math.random() * reasons.length)];
+    private PricingSuggestion.SuggestionReason determineSuggestionReason(Long roomId) {
+        LocalDate start = LocalDate.now();
+        LocalDate end = start.plusDays(30);
+        OptionalDouble avg = availabilityRepository
+            .findByRoomIdAndAvailabilityDateBetween(roomId, start, end)
+            .stream()
+            .mapToDouble(a -> a.getOccupancyPercentage() != null ? a.getOccupancyPercentage() : 0.0)
+            .average();
+        double occ = avg.orElse(50.0);
+        if (occ > 75) return PricingSuggestion.SuggestionReason.HIGH_DEMAND;
+        if (occ < 30) return PricingSuggestion.SuggestionReason.LOW_OCCUPANCY;
+        int month = LocalDate.now().getMonthValue();
+        if (month == 12 || month == 1 || month == 5 || month == 6) return PricingSuggestion.SuggestionReason.SEASONAL_TREND;
+        return PricingSuggestion.SuggestionReason.MARKET_ADJUSTMENT;
     }
 
     private PricingSuggestion.PricingTrend determinePricingTrend(BigDecimal priceChange) {
-        if (priceChange.signum() > 0) {
-            return PricingSuggestion.PricingTrend.INCREASE;
-        } else if (priceChange.signum() < 0) {
-            return PricingSuggestion.PricingTrend.DECREASE;
-        }
+        if (priceChange.signum() > 0) return PricingSuggestion.PricingTrend.INCREASE;
+        if (priceChange.signum() < 0) return PricingSuggestion.PricingTrend.DECREASE;
         return PricingSuggestion.PricingTrend.STABLE;
     }
 

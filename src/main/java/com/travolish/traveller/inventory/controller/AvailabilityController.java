@@ -104,10 +104,11 @@ public class AvailabilityController {
     @ResponseStatus(HttpStatus.OK)
     public void bookRoom(
         @PathVariable Long roomId,
+        @RequestParam Long hotelId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkInDate,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOutDate) {
-        
-        availabilityService.bookRoom(roomId, checkInDate, checkOutDate);
+
+        availabilityService.bookRoom(roomId, hotelId, checkInDate, checkOutDate);
     }
 
     /**
@@ -132,9 +133,10 @@ public class AvailabilityController {
         @PathVariable Long roomId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
         @RequestParam Integer count,
-        @RequestParam(required = false) String reason) {
-        
-        availabilityService.blockRoomsForMaintenance(roomId, date, count, reason);
+        @RequestParam(required = false) String reason,
+        @RequestParam(required = false) Long hotelId) {
+
+        availabilityService.blockRoomsForMaintenance(roomId, date, count, reason, hotelId);
     }
 
     /**
@@ -145,9 +147,10 @@ public class AvailabilityController {
     public void unblockRooms(
         @PathVariable Long roomId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-        @RequestParam Integer count) {
-        
-        availabilityService.unblockRooms(roomId, date, count);
+        @RequestParam Integer count,
+        @RequestParam(required = false) Long hotelId) {
+
+        availabilityService.unblockRooms(roomId, date, count, hotelId);
     }
 
     /**

@@ -127,11 +127,12 @@ public class NotificationController {
     public ResponseEntity<Page<NotificationDTO>> getUserNotifications(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String email) {
         try {
-            log.info("Fetching notifications for user: {} (page: {}, size: {})", userId, page, size);
+            log.info("Fetching notifications for user: {} email: {} (page: {}, size: {})", userId, email, page, size);
             Pageable pageable = PageRequest.of(page, size);
-            Page<NotificationDTO> notifications = notificationService.getUserNotifications(userId, pageable);
+            Page<NotificationDTO> notifications = notificationService.getUserNotificationsWithEmailFallback(userId, email, pageable);
             return ResponseEntity.ok(notifications);
         } catch (Exception e) {
             log.error("Error fetching user notifications: {}", e.getMessage());

@@ -1,6 +1,9 @@
 package com.travolish.traveller.notifications.service;
 
 import com.travolish.traveller.notifications.dto.NotificationDTO;
+import org.springframework.data.domain.PageImpl;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import com.travolish.traveller.notifications.dto.NotificationTemplateDTO;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
 import com.travolish.traveller.notifications.dto.UserNotificationPreferenceDTO;
@@ -105,6 +108,26 @@ public class NotificationService {
     public Page<NotificationDTO> getUserNotifications(Long userId, Pageable pageable) {
         Page<Notification> notifications = notificationRepository.findByUserId(userId, pageable);
         return notifications.map(n -> modelMapper.map(n, NotificationDTO.class));
+    }
+
+    /**
+     * Get notifications by userId + recipientEmail merged and deduplicated.
+     * Handles legacy notifications where userId was not set (null) — found via email.
+     */
+    public Page<NotificationDTO> getUserNotificationsWithEmailFallback(Long userId, String email, Pageable pageable) {
+        // Collect from both sources, deduplicate by id (userId-based first so they win)
+        LinkedHashMap<Long, Notification> merged = new LinkedHashMap<>();
+        notificationRepository.findByUserId(userId, pageable).forEach(n -> merged.put(n.getId(), n));
+        if (email != null && !email.isBlank()) {
+            notificationRepository.findByRecipientEmail(email)
+                .forEach(n -> merged.putIfAbsent(n.getId(), n));
+        }
+        var list = new ArrayList<>(merged.values());
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), list.size());
+        var page = (start > list.size()) ? new ArrayList<Notification>() : list.subList(start, end);
+        return new PageImpl<>(page, pageable, list.size())
+            .map(n -> modelMapper.map(n, NotificationDTO.class));
     }
     
     /**

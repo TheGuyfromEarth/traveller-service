@@ -11,6 +11,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.json.JSONObject;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +32,9 @@ public class PaymentService {
     private final RazorpayIntegrationService razorpayService;
     private final ModelMapper modelMapper;
     
+    @Value("${razorpay.api.key:rzp_test_placeholder}")
+    private String razorpayKeyId;
+
     // Configuration Constants
     private static final String PLATFORM_FEE_PERCENTAGE = "2.5";
     private static final String TAX_PERCENTAGE = "18";
@@ -388,6 +394,69 @@ public class PaymentService {
             log.info("Receipt created for payment: {}", payment.getId());
         } catch (Exception e) {
             log.error("Error creating receipt for payment: {}", payment.getId(), e);
+        }
+    }
+
+    // ─── Razorpay gateway helpers ────────────────────────────────────────────
+
+    /** Returns the public Razorpay key ID for the frontend checkout widget. */
+    public String getRazorpayKeyId() {
+        return razorpayKeyId;
+    }
+
+    /**
+     * Step 1 of checkout: create a Razorpay order and return its ID to the frontend.
+     * The frontend opens the Razorpay checkout popup with this orderId, then calls
+     * /api/payments/validate with the resulting paymentId + signature.
+     */
+    public String createRazorpayOrder(Long userId, BigDecimal amount, String currency, Long bookingId) {
+        log.info("Creating Razorpay order for user {} booking {} amount {}", userId, bookingId, amount);
+        return razorpayService.createOrder(bookingId, amount, currency,
+            "Travolish booking payment" + (bookingId != null ? " #" + bookingId : ""));
+    }
+
+    /**
+     * Razorpay webhook handler — processes payment.captured / payment.failed events.
+     * Razorpay sends a POST to /api/payments/webhook/razorpay with an HMAC-SHA256 signature.
+     */
+    public void handleRazorpayWebhook(String payload, String signature) {
+        log.info("Processing Razorpay webhook, payload size: {}", payload.length());
+        try {
+            JSONObject event = new JSONObject(payload);
+            String eventType = event.optString("event");
+            JSONObject payloadObj = event.optJSONObject("payload");
+            if (payloadObj == null) return;
+
+            JSONObject paymentEntity = payloadObj.optJSONObject("payment");
+            if (paymentEntity == null) return;
+            JSONObject entity = paymentEntity.optJSONObject("entity");
+            if (entity == null) return;
+
+            String razorpayOrderId = entity.optString("order_id");
+            String razorpayPaymentId = entity.optString("id");
+
+            if ("payment.captured".equals(eventType)) {
+                // Mark payment as COMPLETED
+                paymentRepository.findByRazorpayOrderId(razorpayOrderId).ifPresent(p -> {
+                    p.setPaymentStatus(PaymentStatus.COMPLETED);
+                    p.setRazorpayPaymentId(razorpayPaymentId);
+                    p.setCompletedAt(LocalDateTime.now());
+                    paymentRepository.save(p);
+                    createReceipt(p);
+                    log.info("Payment {} marked COMPLETED via webhook", p.getId());
+                });
+            } else if ("payment.failed".equals(eventType)) {
+                paymentRepository.findByRazorpayOrderId(razorpayOrderId).ifPresent(p -> {
+                    p.setPaymentStatus(PaymentStatus.FAILED);
+                    p.setErrorMessage("Payment failed — " + entity.optString("error_description", "gateway error"));
+                    paymentRepository.save(p);
+                    log.warn("Payment {} marked FAILED via webhook", p.getId());
+                });
+            } else if ("refund.processed".equals(eventType)) {
+                log.info("Refund processed for order {}", razorpayOrderId);
+            }
+        } catch (Exception e) {
+            log.error("Error handling Razorpay webhook: {}", e.getMessage(), e);
         }
     }
 }

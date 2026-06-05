@@ -55,9 +55,9 @@ public class BookingPriceDTO {
      */
     public String getPriceSummary() {
         return String.format(
-            "Base: $%.2f/night × %d nights = $%.2f | " +
+            "Base: ₹%.2f/night × %d nights = ₹%.2f | " +
             "Seasonal: %+.2f | Dynamic: %+.2f | Promo: %+.2f | " +
-            "Total: $%.2f",
+            "Total: ₹%.2f",
             basePrice, numberOfNights, basePriceTotal,
             seasonalAdjustment, dynamicPricingAdjustment, promotionalDiscount,
             totalPrice

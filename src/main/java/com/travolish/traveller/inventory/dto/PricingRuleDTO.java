@@ -40,6 +40,8 @@ public class PricingRuleDTO {
 
     private String description;
 
+    private String promoCode;
+
     private String season;
 
     private Boolean isActive;

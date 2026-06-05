@@ -7,13 +7,16 @@ import com.travolish.traveller.ai.repository.ListingDescriptionRepository;
 import com.travolish.traveller.ai.service.DescriptionGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +26,12 @@ import java.util.stream.Collectors;
 public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorService {
 
     private final ListingDescriptionRepository listingDescriptionRepository;
+
+    @Value("${anthropic.api.key:${ANTHROPIC_API_KEY:}}")
+    private String anthropicApiKey;
+
+    private static final String ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+    private static final String CLAUDE_MODEL = "claude-haiku-4-5-20251001"; // fast + cost-effective for descriptions
 
     @Override
     public ListingDescriptionDTO generateDescription(GenerateDescriptionRequest request) {
@@ -155,17 +164,82 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
         return "[Translated] " + text;
     }
 
+    /**
+     * Calls Anthropic Claude API to generate an enhanced property description.
+     * Falls back to a template-based enhancement when the API key is not set.
+     */
     private String generateAIDescription(String original, String targetLanguage) {
-        // Simulate AI description generation
-        return "Enhanced description: " + original + " [Optimized for " + targetLanguage + "]";
+        if (anthropicApiKey == null || anthropicApiKey.isBlank() || anthropicApiKey.startsWith("placeholder")) {
+            log.warn("Anthropic API key not configured — using template-based description enhancement");
+            return buildTemplateDescription(original, targetLanguage);
+        }
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("x-api-key", anthropicApiKey);
+            headers.set("anthropic-version", "2023-06-01");
+
+            String prompt = buildDescriptionPrompt(original, targetLanguage);
+
+            Map<String, Object> message = Map.of("role", "user", "content", prompt);
+            Map<String, Object> body = Map.of(
+                "model", CLAUDE_MODEL,
+                "max_tokens", 512,
+                "messages", List.of(message)
+            );
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.exchange(ANTHROPIC_API_URL, HttpMethod.POST, request, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> content = (List<Map<String, Object>>) response.getBody().get("content");
+                if (content != null && !content.isEmpty()) {
+                    String generated = (String) content.get(0).get("text");
+                    log.info("Claude API generated description ({} chars)", generated.length());
+                    return generated.trim();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Claude API call failed: {} — falling back to template", e.getMessage());
+        }
+
+        return buildTemplateDescription(original, targetLanguage);
+    }
+
+    private String buildDescriptionPrompt(String original, String targetLanguage) {
+        String lang = targetLanguage != null && !targetLanguage.isBlank() ? targetLanguage : "English";
+        return String.format("""
+            You are a professional travel copywriter. Rewrite and enhance the following hotel/room description \
+            to make it more engaging, vivid, and compelling for travellers. \
+            Use warm, welcoming language and highlight unique features. \
+            Keep it between 80-150 words. \
+            Write in %s.
+
+            Original description:
+            %s
+
+            Enhanced description:""", lang, original);
+    }
+
+    private String buildTemplateDescription(String original, String targetLanguage) {
+        if (original == null || original.isBlank()) return "A comfortable and welcoming property awaiting your arrival.";
+        String base = original.trim();
+        String suffix = "ENGLISH".equalsIgnoreCase(targetLanguage) || targetLanguage == null ? "" : " [" + targetLanguage + "]";
+        return "Experience " + base.toLowerCase().replaceFirst("^an? |^the ", "")
+            + ". This carefully curated property offers everything you need for a memorable stay." + suffix;
     }
 
     private double calculateQualityScore(String original, String generated) {
-        // Simple quality calculation based on length and content
-        int originalLen = original.length();
+        if (generated == null || original == null) return 0.5;
         int generatedLen = generated.length();
-        double lengthRatio = (double) generatedLen / Math.max(originalLen, 1);
-        return Math.min(lengthRatio * 0.5 + 0.5, 1.0);
+        // Score based on whether the generated text is meaningfully longer than original
+        // and within the ideal 80-200 word range
+        int wordCount = generated.split("\\s+").length;
+        double lengthScore = wordCount >= 60 && wordCount <= 200 ? 1.0 : 0.7;
+        return Math.min(lengthScore, 1.0);
     }
 
     private ListingDescriptionDTO mapToDTO(ListingDescription description) {

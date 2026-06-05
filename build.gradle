@@ -26,14 +26,15 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0'
-	
-	// Supabase Storage (replacing S3)
-	implementation 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
+
+	implementation 'software.amazon.awssdk:s3:2.25.69'
+	implementation 'software.amazon.awssdk:auth:2.25.69'
 
 	// Google Cloud Storage (GCS) — for signed upload URLs and profile image storage
 	implementation 'com.google.cloud:google-cloud-storage:2.43.1'

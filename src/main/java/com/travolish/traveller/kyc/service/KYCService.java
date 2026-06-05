@@ -165,29 +165,36 @@ public class KYCService {
             return hostKYCRepository.save(newKyc);
         });
         
-        // Check if document type already exists and verified
-        var existingDocument = hostDocumentRepository
-            .findByHostKYCIdAndDocumentType(hostKYC.getId(), request.getDocumentType());
-        
-        if (existingDocument.isPresent() && "VERIFIED".equals(existingDocument.get().getVerificationStatus())) {
-            throw new IllegalStateException("A verified document of this type already exists");
+        // Upsert: use findAll to handle legacy duplicates gracefully
+        java.util.List<HostDocument> existingDocs = hostDocumentRepository
+            .findAllByHostKYCIdAndDocumentType(hostKYC.getId(), request.getDocumentType());
+
+        if (!existingDocs.isEmpty() && "VERIFIED".equals(existingDocs.get(0).getVerificationStatus())) {
+            throw new IllegalStateException("A verified document of this type already exists and cannot be replaced");
         }
-        
-        HostDocument document = new HostDocument();
-        document.setHostKYC(hostKYC);
-        document.setDocumentType(request.getDocumentType());
-        document.setDocumentNumber(request.getDocumentNumber());
+
+        // Remove older duplicates — keep the most recent (index 0, ordered DESC)
+        if (existingDocs.size() > 1) {
+            hostDocumentRepository.deleteAll(existingDocs.subList(1, existingDocs.size()));
+        }
+
+        HostDocument document = existingDocs.isEmpty() ? null : existingDocs.get(0);
+        if (document == null) {
+            document = new HostDocument();
+            document.setHostKYC(hostKYC);
+            document.setDocumentType(request.getDocumentType());
+            document.setCreatedAt(LocalDateTime.now());
+        }
+
+        // Apply or refresh all mutable fields
+        if (request.getDocumentNumber() != null) document.setDocumentNumber(request.getDocumentNumber());
         document.setFileUrl(request.getFileUrl() != null ? request.getFileUrl() : "pending-upload");
         document.setIssuedDate(request.getIssuedDate() != null ? LocalDate.parse(request.getIssuedDate()) : LocalDate.now());
         document.setExpiryDate(request.getExpiryDate() != null ? LocalDate.parse(request.getExpiryDate()) : LocalDate.now().plusYears(10));
-        
-        // Set initial verification status
         document.setVerificationStatus("PENDING");
         document.setAiVerified(false);
         document.setAiConfidenceScore(0.0);
-        
-        document.setCreatedAt(LocalDateTime.now());
-        
+
         document = hostDocumentRepository.save(document);
         
         // Update KYC status if this is first document
@@ -405,6 +412,24 @@ public class KYCService {
         return modelMapper.map(newPrimaryAccount, HostBankAccountDTO.class);
     }
     
+    /**
+     * Delete a bank account by ID (host must own the account)
+     */
+    @Transactional
+    public void deleteBankAccount(Long bankAccountId, Long hostId) {
+        log.info("Deleting bank account {} for host {}", bankAccountId, hostId);
+        var account = hostBankAccountRepository.findById(bankAccountId)
+            .orElseThrow(() -> new IllegalArgumentException("Bank account not found: " + bankAccountId));
+        if (hostId != null) {
+            var hostKYC = hostKYCRepository.findByHostId(hostId).orElse(null);
+            if (hostKYC != null && !account.getHostKYC().getId().equals(hostKYC.getId())) {
+                throw new IllegalArgumentException("Bank account does not belong to this host");
+            }
+        }
+        hostBankAccountRepository.deleteById(bankAccountId);
+        log.info("Bank account {} deleted", bankAccountId);
+    }
+
     /**
      * Get complete verification status for a host
      */

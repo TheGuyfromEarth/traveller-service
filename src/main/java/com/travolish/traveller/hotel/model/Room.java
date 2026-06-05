@@ -6,6 +6,8 @@ import java.util.List;
 import jakarta.persistence.*;
 import lombok.*;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import com.travolish.traveller.review.model.Review;
 
 @Entity
@@ -25,6 +27,8 @@ public class Room {
 
     private Double pricePerNight;
 
+    private Integer capacity = 2;  // max guests this room sleeps; defaults to 2
+
     private Boolean available = true;
 
     // store only the hotel's primary key
@@ -33,6 +37,7 @@ public class Room {
 
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
+    @JsonIgnore
     @OneToMany(mappedBy = "roomId", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

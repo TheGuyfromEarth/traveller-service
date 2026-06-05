@@ -44,4 +44,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     
     @Query("SELECT DISTINCT n.userId FROM Notification n WHERE n.type = :type AND n.createdAt >= :since ORDER BY n.userId")
     List<Long> findUserIdsForNotificationType(@Param("type") NotificationType type, @Param("since") LocalDateTime since);
+
+    // Fallback: find by recipient email for notifications where userId is not set
+    @Query("SELECT n FROM Notification n WHERE n.recipientEmail = :email ORDER BY n.createdAt DESC")
+    List<Notification> findByRecipientEmail(@Param("email") String email);
+
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.recipientEmail = :email AND n.isRead = false")
+    Long countUnreadByRecipientEmail(@Param("email") String email);
 }

@@ -62,6 +62,7 @@ public class SupabaseStorageService {
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + supabaseApiKey);
+            headers.set("apikey", supabaseApiKey);   // Supabase requires both headers
             headers.set("Content-Type", contentType);
 
             HttpEntity<byte[]> entity = new HttpEntity<>(fileContent, headers);

@@ -6,7 +6,7 @@ import java.time.Duration;
 
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
-import com.travolish.traveller.user.service.SupabaseStorageService;
+import com.travolish.traveller.storage.service.R2StorageService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class ImageController {
 
     private final UserRepository userRepository;
-    private final SupabaseStorageService supabaseStorageService;
+    private final R2StorageService r2StorageService;
 
     @PostMapping("/{id}/image")
     public ResponseEntity<?> uploadImage(@PathVariable Long id, @RequestPart("file") MultipartFile file) throws Exception {
@@ -39,7 +39,7 @@ public class ImageController {
 
         String key = String.format("users/%d/profile-%d%s", id, System.currentTimeMillis(), ext);
 
-        supabaseStorageService.upload(key, file.getInputStream(), file.getContentType());
+        r2StorageService.upload(key, file.getInputStream(), file.getContentType());
 
         user.setImageKey(key);
         userRepository.save(user);
@@ -53,7 +53,7 @@ public class ImageController {
         if (user.getImageKey() == null) {
             return ResponseEntity.notFound().build();
         }
-        URL url = supabaseStorageService.getPresignedUrl(user.getImageKey(), Duration.ofHours(1));
+        URL url = r2StorageService.getPresignedUrl(user.getImageKey(), Duration.ofHours(1));
         return ResponseEntity.ok().location(URI.create(url.toString())).build();
     }
 }

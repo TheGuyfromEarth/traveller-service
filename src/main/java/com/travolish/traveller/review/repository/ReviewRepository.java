@@ -44,12 +44,12 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT r FROM Review r WHERE r.hotelId = :hotelId AND r.rating >= :minRating AND r.rating <= :maxRating AND r.status = 'APPROVED' ORDER BY r.createdAt DESC")
     List<Review> findByHotelIdAndRatingRange(@Param("hotelId") Long hotelId, @Param("minRating") Integer minRating, @Param("maxRating") Integer maxRating);
 
-    // Check if user already reviewed a hotel
-    @Query("SELECT r FROM Review r WHERE r.userId = :userId AND r.hotelId = :hotelId AND r.reviewType = 'HOTEL'")
+    // Check if user already reviewed a hotel — ORDER BY + LIMIT guards against duplicate rows
+    @Query("SELECT r FROM Review r WHERE r.userId = :userId AND r.hotelId = :hotelId AND r.reviewType = 'HOTEL' ORDER BY r.createdAt DESC LIMIT 1")
     Optional<Review> findUserHotelReview(@Param("userId") Long userId, @Param("hotelId") Long hotelId);
 
     // Check if user already reviewed a room
-    @Query("SELECT r FROM Review r WHERE r.userId = :userId AND r.roomId = :roomId AND r.reviewType = 'ROOM'")
+    @Query("SELECT r FROM Review r WHERE r.userId = :userId AND r.roomId = :roomId AND r.reviewType = 'ROOM' ORDER BY r.createdAt DESC LIMIT 1")
     Optional<Review> findUserRoomReview(@Param("userId") Long userId, @Param("roomId") Long roomId);
 
     // Count approved reviews for hotel

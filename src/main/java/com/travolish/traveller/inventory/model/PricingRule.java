@@ -24,7 +24,7 @@ public class PricingRule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "room_id", nullable = false)
+    @Column(name = "room_id") // nullable — null means hotel-wide rule
     private Long roomId;
 
     @Column(name = "hotel_id", nullable = false)
@@ -65,6 +65,9 @@ public class PricingRule {
     private Integer priority = 1; // Higher priority applied first (1=highest)
 
     private String description;
+
+    /** Traveller-facing promo code (e.g. WEEKEND18). Auto-generated from description when null. */
+    private String promoCode;
 
     private String season; // e.g., "SUMMER", "WINTER", "HOLIDAY"
 

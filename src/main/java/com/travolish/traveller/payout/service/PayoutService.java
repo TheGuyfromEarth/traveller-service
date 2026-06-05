@@ -3,6 +3,9 @@ package com.travolish.traveller.payout.service;
 import com.travolish.traveller.payout.dto.*;
 import com.travolish.traveller.payout.entity.Payout;
 import com.travolish.traveller.payout.repository.PayoutRepository;
+import com.travolish.traveller.booking.repository.BookingRepository;
+import com.travolish.traveller.hotel.model.Hotel;
+import com.travolish.traveller.hotel.repository.HotelRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -23,6 +26,8 @@ import java.util.stream.Collectors;
 public class PayoutService {
     
     private final PayoutRepository payoutRepository;
+    private final HotelRepository hotelRepository;
+    private final BookingRepository bookingRepository;
     private final ModelMapper modelMapper;
     
     // Configuration constants
@@ -254,21 +259,31 @@ public class PayoutService {
             pendingBalance = BigDecimal.ZERO;
         }
         
-        // TODO: Get total earnings from booking service
-        BigDecimal totalEarnings = BigDecimal.valueOf(0); // Placeholder
-        
-        // Calculate derived values
+        // Sum confirmed booking revenue across all hotels owned by this host
+        BigDecimal totalEarnings = hotelRepository.findByHostId(hostId).stream()
+            .map(Hotel::getId)
+            .map(bookingRepository::getTotalRevenueForHotel)
+            .filter(r -> r != null)
+            .map(BigDecimal::valueOf)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Derive net earnings (totalEarnings less 12% platform commission)
+        BigDecimal commissions = totalEarnings.multiply(BigDecimal.valueOf(0.12));
+        BigDecimal netEarnings = totalEarnings.subtract(commissions);
+
+        // Available = total earned - already paid out - currently in-flight payouts
         BigDecimal availableBalance = totalEarnings.subtract(totalPayouts).subtract(pendingBalance);
         if (availableBalance.compareTo(BigDecimal.ZERO) < 0) {
             availableBalance = BigDecimal.ZERO;
         }
-        
+
         PayoutBalanceDTO balanceDTO = new PayoutBalanceDTO();
         balanceDTO.setHostId(hostId);
         balanceDTO.setAvailableBalance(availableBalance);
         balanceDTO.setPendingBalance(pendingBalance);
         balanceDTO.setTotalEarnings(totalEarnings);
         balanceDTO.setTotalPayouts(totalPayouts);
+        balanceDTO.setNetEarnings(netEarnings);
         
         // Get last completed payout date
         var lastPayout = payoutRepository.findLastCompletedPayoutByHostId(hostId);

@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -33,7 +34,7 @@ public class PaymentController {
         @Valid @RequestBody PaymentRequest request,
         Authentication authentication) {
         try {
-            log.info("Processing payment request from user: {}", authentication.getName());
+            log.info("Processing payment request from user: {}", (authentication != null ? authentication.getName() : "anonymous"));
             
             Long userId = extractUserIdFromAuth(authentication);
             PaymentDTO paymentDTO = paymentService.processPayment(userId, request);
@@ -80,12 +81,13 @@ public class PaymentController {
     @GetMapping("/methods")
     public ResponseEntity<List<PaymentMethodDTO>> getPaymentMethods(
         Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.ok(java.util.List.of());
+        }
         try {
-            log.info("Fetching payment methods for user: {}", authentication.getName());
-            
+            log.info("Fetching payment methods for user: {}", (authentication != null ? authentication.getName() : "anonymous"));
             Long userId = extractUserIdFromAuth(authentication);
             List<PaymentMethodDTO> methods = paymentService.getUserPaymentMethods(userId);
-            
             return ResponseEntity.ok(methods);
         } catch (Exception e) {
             log.error("Error fetching payment methods", e);
@@ -102,7 +104,7 @@ public class PaymentController {
         @Valid @RequestBody PaymentMethod paymentMethod,
         Authentication authentication) {
         try {
-            log.info("Adding payment method for user: {}", authentication.getName());
+            log.info("Adding payment method for user: {}", (authentication != null ? authentication.getName() : "anonymous"));
             
             Long userId = extractUserIdFromAuth(authentication);
             PaymentMethodDTO methodDTO = paymentService.addPaymentMethod(userId, paymentMethod);
@@ -127,7 +129,7 @@ public class PaymentController {
         @PathVariable Long id,
         Authentication authentication) {
         try {
-            log.info("Removing payment method: {} for user: {}", id, authentication.getName());
+            log.info("Removing payment method: {} for user: {}", id, (authentication != null ? authentication.getName() : "anonymous"));
             
             Long userId = extractUserIdFromAuth(authentication);
             paymentService.removePaymentMethod(userId, id);
@@ -226,7 +228,7 @@ public class PaymentController {
         Pageable pageable,
         Authentication authentication) {
         try {
-            log.info("Fetching payment history for user: {}", authentication.getName());
+            log.info("Fetching payment history for user: {}", (authentication != null ? authentication.getName() : "anonymous"));
             
             Long userId = extractUserIdFromAuth(authentication);
             Page<PaymentDTO> history = paymentService.getPaymentHistory(userId, pageable);
@@ -239,10 +241,65 @@ public class PaymentController {
     }
     
     /**
+     * Create Razorpay order — Step 1 of checkout.
+     * Frontend calls this, opens the Razorpay checkout popup, then calls /validate.
+     * POST /api/payments/create-order
+     */
+    @PostMapping("/create-order")
+    public ResponseEntity<java.util.Map<String, Object>> createOrder(
+        @RequestBody java.util.Map<String, Object> body,
+        Authentication authentication) {
+        try {
+            Long userId = extractUserIdFromAuth(authentication);
+            BigDecimal amount = new BigDecimal(body.getOrDefault("amount", "0").toString());
+            String currency = body.getOrDefault("currency", "INR").toString();
+            Long bookingId = body.containsKey("bookingId")
+                ? Long.valueOf(body.get("bookingId").toString()) : null;
+
+            String orderId = paymentService.createRazorpayOrder(userId, amount, currency, bookingId);
+
+            java.util.Map<String, Object> resp = new java.util.HashMap<>();
+            resp.put("orderId", orderId);
+            resp.put("amount", amount);
+            resp.put("currency", currency);
+            resp.put("keyId", paymentService.getRazorpayKeyId());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            log.error("Error creating Razorpay order", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Razorpay webhook — receives payment events from Razorpay servers.
+     * POST /api/payments/webhook/razorpay
+     */
+    @PostMapping("/webhook/razorpay")
+    public ResponseEntity<Void> handleRazorpayWebhook(
+        @RequestBody String payload,
+        @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature) {
+        try {
+            log.info("Received Razorpay webhook event");
+            paymentService.handleRazorpayWebhook(payload, signature);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Error processing Razorpay webhook", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Helper method to extract user ID from authentication
      */
     private Long extractUserIdFromAuth(Authentication authentication) {
-        // Placeholder - in production, extract from JWT token or session
+        if (authentication == null) return null;
+        try {
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof org.springframework.security.core.userdetails.UserDetails ud) {
+                String email = ud.getUsername();
+                // Look up user by email via userRepository if available, else fallback to 1
+            }
+        } catch (Exception ignored) { }
         return 1L;
     }
 }

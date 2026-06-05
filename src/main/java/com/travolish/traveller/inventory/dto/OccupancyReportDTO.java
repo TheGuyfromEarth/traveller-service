@@ -1,6 +1,7 @@
 package com.travolish.traveller.inventory.dto;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,4 +22,15 @@ public class OccupancyReportDTO {
     private Integer totalBookings;
     private Integer totalCancellations;
     private Double cancellationRate;
+    private List<SegmentDTO> segments;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class SegmentDTO {
+        private String segmentName;
+        private Double percentage;
+        private String trend;
+    }
 }

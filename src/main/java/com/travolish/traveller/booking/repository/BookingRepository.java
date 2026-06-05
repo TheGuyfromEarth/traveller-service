@@ -29,6 +29,19 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByGuestEmailIgnoreCase(String guestEmail);
 
     /**
+     * Find active (CONFIRMED or PENDING) bookings whose checkout date has passed.
+     * Used by BookingStatusScheduler to transition them to COMPLETED.
+     */
+    @Query("SELECT b FROM Booking b WHERE b.status IN " +
+           "('CONFIRMED', 'PENDING') AND b.checkOutDate IS NOT NULL AND b.checkOutDate < :today")
+    List<Booking> findExpiredActiveBookings(@Param("today") LocalDate today);
+
+    /**
+     * Find all bookings for an authenticated user (by userId)
+     */
+    List<Booking> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    /**
      * Find all bookings for a specific room and status
      */
     List<Booking> findByRoomIdAndStatus(Long roomId, Booking.BookingStatus status);

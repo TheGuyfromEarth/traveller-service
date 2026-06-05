@@ -54,4 +54,6 @@ public interface BookingService {
      * Get all bookings for a specific guest email
      */
     List<Booking> findByGuestEmail(String guestEmail);
+
+    List<Booking> findByUserId(Long userId);
 }

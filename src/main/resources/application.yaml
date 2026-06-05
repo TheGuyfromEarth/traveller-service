@@ -1,6 +1,11 @@
 spring:
   application:
     name: traveller-service
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 200MB      # per-file limit (images + videos)
+      max-request-size: 210MB   # total request including form fields
   datasource:
     url: jdbc:postgresql://db.hizprgnbtsomiucqwull.supabase.co:5432/postgres?sslmode=require
     username: postgres
@@ -52,14 +57,27 @@ spring:
         await-termination: true
         await-termination-period: 30s
 
+# Anthropic Claude API for AI features (descriptions, chatbot, pricing)
+anthropic:
+  api:
+    key: ${ANTHROPIC_API_KEY:}
+
 # Google Cloud Storage
 gcs:
   bucket-name: travolish-avatars
 
-# Supabase Storage (database + file storage — auth handled by Google directly)
+# Cloudflare R2 — S3-compatible object storage with zero egress fees
+r2:
+  account-id: ${R2_ACCOUNT_ID}
+  access-key-id: ${R2_ACCESS_KEY_ID}
+  secret-access-key: ${R2_SECRET_ACCESS_KEY}
+  bucket-name: ${R2_BUCKET_NAME:travolish-media}
+  public-url: ${R2_PUBLIC_URL}   # e.g. https://pub-xxxxxxxx.r2.dev or custom domain
+
+# Supabase (database connection only — storage migrated to R2)
 supabase:
   url: https://hizprgnbtsomiucqwull.supabase.co
-  api-key: ${SUPABASE_API_KEY}
+  api-key: ${SUPABASE_API_KEY:}
   bucket-name: travolish-bucket
 
 # Google OAuth2
@@ -76,6 +94,12 @@ jwt:
     expiration: 604800000
 
 # Apple OAuth configuration
+# Razorpay payment gateway
+razorpay:
+  api:
+    key: ${RAZORPAY_KEY_ID:rzp_test_placeholder}
+    secret: ${RAZORPAY_KEY_SECRET:placeholder_razorpay_secret}
+
 apple:
   client-id: ${APPLE_CLIENT_ID:com.travolish.app}
   team-id: ${APPLE_TEAM_ID:ABCD123456}

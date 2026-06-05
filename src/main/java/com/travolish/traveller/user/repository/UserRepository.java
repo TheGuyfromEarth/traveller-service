@@ -13,7 +13,9 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
-    Optional<User> findByEmail(String email);
+    // LIMIT 1 guards against duplicate email rows created by test runs
+    @Query("SELECT u FROM User u WHERE u.email = :email ORDER BY u.id ASC LIMIT 1")
+    Optional<User> findByEmail(@Param("email") String email);
     Optional<User> findBySupabaseId(String supabaseId);
     Optional<User> findByProviderAndProviderId(String provider, String providerId);
 

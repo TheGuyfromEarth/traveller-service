@@ -67,6 +67,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
         rule.setFixedDiscount(ruleDTO.getFixedDiscount());
         rule.setPriority(ruleDTO.getPriority());
         rule.setDescription(ruleDTO.getDescription());
+        if (ruleDTO.getPromoCode() != null) rule.setPromoCode(ruleDTO.getPromoCode());
         rule.setUpdatedAt(OffsetDateTime.now());
 
         rule.calculatePrice();
@@ -346,7 +347,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
             throw InvalidPricingRuleException.invalidDateRange();
         }
 
-        if (ruleDTO.getBasePrice() < 0) {
+        if (ruleDTO.getBasePrice() != null && ruleDTO.getBasePrice() < 0) {
             throw InvalidPricingRuleException.invalidPrice(ruleDTO.getBasePrice());
         }
 
@@ -373,6 +374,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
             .ruleType(rule.getRuleType().toString())
             .priority(rule.getPriority())
             .description(rule.getDescription())
+            .promoCode(rule.getPromoCode())
             .season(rule.getSeason())
             .isActive(rule.getIsActive())
             .createdAt(rule.getCreatedAt())

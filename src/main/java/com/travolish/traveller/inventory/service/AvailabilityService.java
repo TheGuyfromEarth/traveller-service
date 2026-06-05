@@ -44,7 +44,7 @@ public interface AvailabilityService {
     /**
      * Book a room (reduce available count)
      */
-    void bookRoom(Long roomId, LocalDate checkInDate, LocalDate checkOutDate);
+    void bookRoom(Long roomId, Long hotelId, LocalDate checkInDate, LocalDate checkOutDate);
 
     /**
      * Cancel booking (increase available count)
@@ -52,14 +52,14 @@ public interface AvailabilityService {
     void cancelBooking(Long roomId, LocalDate checkInDate, LocalDate checkOutDate);
 
     /**
-     * Block rooms for maintenance
+     * Block rooms for maintenance. hotelId is used to auto-create the record when none exists yet.
      */
-    void blockRoomsForMaintenance(Long roomId, LocalDate date, Integer count, String reason);
+    void blockRoomsForMaintenance(Long roomId, LocalDate date, Integer count, String reason, Long hotelId);
 
     /**
-     * Unblock rooms
+     * Unblock rooms. hotelId is used to auto-create the record when none exists yet.
      */
-    void unblockRooms(Long roomId, LocalDate date, Integer count);
+    void unblockRooms(Long roomId, LocalDate date, Integer count, Long hotelId);
 
     /**
      * Initialize room availability for future dates (typically 1-2 years ahead)

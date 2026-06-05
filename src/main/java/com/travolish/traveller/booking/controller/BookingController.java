@@ -18,13 +18,30 @@ import com.travolish.traveller.booking.service.BookingService;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler;
 
-    public BookingController(BookingService bookingService) {
+    public BookingController(BookingService bookingService,
+                             com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler) {
         this.bookingService = bookingService;
+        this.bookingStatusScheduler = bookingStatusScheduler;
+    }
+
+    /** On-demand status refresh — called by trips page on load so users never see stale PENDING for past stays. */
+    @PostMapping("/refresh-statuses")
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> refreshStatuses() {
+        int updated = bookingStatusScheduler.runStatusTransition("on-demand");
+        return org.springframework.http.ResponseEntity.ok(
+            java.util.Map.of("transitioned", updated, "message",
+                updated > 0 ? updated + " booking(s) marked COMPLETED" : "All statuses up to date"));
     }
 
     @GetMapping
-    public List<Booking> list(@RequestParam(required = false) String guestEmail) {
+    public List<Booking> list(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String guestEmail) {
+        if (userId != null) {
+            return bookingService.findByUserId(userId);
+        }
         if (guestEmail != null && !guestEmail.isBlank()) {
             return bookingService.findByGuestEmail(guestEmail);
         }
