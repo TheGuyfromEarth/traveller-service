@@ -18,6 +18,10 @@ public class HotelSearchRequest {
     private String name;
     private Double minRating;
     private Double maxRating;
+    private Double latMin;
+    private Double latMax;
+    private Double lngMin;
+    private Double lngMax;
     @Default
     private Integer pageNumber = 0;
     @Default

@@ -55,7 +55,10 @@ public class HotelSearchService {
                 .and(HotelSpecification.withCity(searchRequest.getCity()))
                 .and(HotelSpecification.withName(searchRequest.getName()))
                 .and(HotelSpecification.withMinRating(searchRequest.getMinRating()))
-                .and(HotelSpecification.withMaxRating(searchRequest.getMaxRating()));
+                .and(HotelSpecification.withMaxRating(searchRequest.getMaxRating()))
+                .and(HotelSpecification.withBbox(
+                        searchRequest.getLatMin(), searchRequest.getLatMax(),
+                        searchRequest.getLngMin(), searchRequest.getLngMax()));
     }
 
     private HotelSearchResponse mapToResponse(Hotel hotel, int reviewCount) {

@@ -29,6 +29,10 @@ public class HotelSearchController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) Double minRating,
             @RequestParam(required = false) Double maxRating,
+            @RequestParam(required = false) Double latMin,
+            @RequestParam(required = false) Double latMax,
+            @RequestParam(required = false) Double lngMin,
+            @RequestParam(required = false) Double lngMax,
             @RequestParam(defaultValue = "0") Integer pageNumber,
             @RequestParam(defaultValue = "10") Integer pageSize) {
 
@@ -39,6 +43,10 @@ public class HotelSearchController {
                 .name(name)
                 .minRating(minRating)
                 .maxRating(maxRating)
+                .latMin(latMin)
+                .latMax(latMax)
+                .lngMin(lngMin)
+                .lngMax(lngMax)
                 .pageNumber(pageNumber)
                 .pageSize(pageSize)
                 .build();

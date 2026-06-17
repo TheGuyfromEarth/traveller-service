@@ -39,6 +39,19 @@ public class HotelSpecification {
                 criteriaBuilder.lessThanOrEqualTo(root.get("rating"), maxRating);
     }
 
+    public static Specification<Hotel> withBbox(Double latMin, Double latMax, Double lngMin, Double lngMax) {
+        return (root, query, cb) -> {
+            if (latMin == null || latMax == null || lngMin == null || lngMax == null)
+                return cb.conjunction();
+            return cb.and(
+                cb.greaterThanOrEqualTo(root.get("latitude"), latMin),
+                cb.lessThanOrEqualTo(root.get("latitude"), latMax),
+                cb.greaterThanOrEqualTo(root.get("longitude"), lngMin),
+                cb.lessThanOrEqualTo(root.get("longitude"), lngMax)
+            );
+        };
+    }
+
     public static Specification<Hotel> withQuery(String query) {
         return (root, cq, cb) -> {
             if (query == null || query.isBlank()) return cb.conjunction();

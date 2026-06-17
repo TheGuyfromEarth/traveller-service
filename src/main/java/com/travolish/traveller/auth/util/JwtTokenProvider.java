@@ -149,7 +149,9 @@ public class JwtTokenProvider {
         claims.put("provider", user.getProvider());
         claims.put("firstName", user.getFirstName());
         claims.put("lastName", user.getLastName());
-        
+        // Role drives Spring Security authorities in JwtAuthFilter
+        String role = user.getRole() != null ? user.getRole().toUpperCase() : "GUEST";
+        claims.put("role", role);
         return claims;
     }
 }

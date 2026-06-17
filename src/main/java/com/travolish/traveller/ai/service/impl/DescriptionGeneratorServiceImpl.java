@@ -5,6 +5,7 @@ import com.travolish.traveller.ai.dto.GenerateDescriptionRequest;
 import com.travolish.traveller.ai.entity.ListingDescription;
 import com.travolish.traveller.ai.repository.ListingDescriptionRepository;
 import com.travolish.traveller.ai.service.DescriptionGeneratorService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.*;
 
@@ -27,11 +29,22 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
 
     private final ListingDescriptionRepository listingDescriptionRepository;
 
-    @Value("${anthropic.api.key:${ANTHROPIC_API_KEY:}}")
-    private String anthropicApiKey;
+    @Value("${gemini.api.key:${GEMINI_API_KEY:}}")
+    private String geminiApiKey;
 
-    private static final String ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-    private static final String CLAUDE_MODEL = "claude-haiku-4-5-20251001"; // fast + cost-effective for descriptions
+    @PostConstruct
+    void logKeyStatus() {
+        if (geminiApiKey == null || geminiApiKey.isBlank()) {
+            log.warn("GEMINI_API_KEY is not set — AI description generation will use template fallback");
+        } else {
+            log.info("Gemini API key loaded ({}...{})", geminiApiKey.substring(0, Math.min(4, geminiApiKey.length())),
+                     geminiApiKey.substring(Math.max(0, geminiApiKey.length() - 4)));
+        }
+    }
+
+    private static final String GEMINI_MODEL = "gemini-2.5-flash";
+    private static final String GEMINI_API_URL =
+        "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=";
 
     @Override
     public ListingDescriptionDTO generateDescription(GenerateDescriptionRequest request) {
@@ -59,7 +72,7 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
                 .isActive(false)
                 .characterCount(generatedDescription.length())
                 .wordCount(generatedDescription.split("\\s+").length)
-                .aiModel("GPT-4-Turbo")
+                .aiModel(GEMINI_MODEL)
                 .build();
 
         ListingDescription saved = listingDescriptionRepository.save(description);
@@ -165,12 +178,13 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
     }
 
     /**
-     * Calls Anthropic Claude API to generate an enhanced property description.
+     * Calls Google Gemini API to generate an enhanced property description.
      * Falls back to a template-based enhancement when the API key is not set.
+     * Free tier: 1,500 requests/day, 15 RPM — sufficient for an MVP.
      */
     private String generateAIDescription(String original, String targetLanguage) {
-        if (anthropicApiKey == null || anthropicApiKey.isBlank() || anthropicApiKey.startsWith("placeholder")) {
-            log.warn("Anthropic API key not configured — using template-based description enhancement");
+        if (geminiApiKey == null || geminiApiKey.isBlank() || geminiApiKey.startsWith("placeholder")) {
+            log.warn("Gemini API key not configured — using template-based description enhancement");
             return buildTemplateDescription(original, targetLanguage);
         }
 
@@ -178,32 +192,40 @@ public class DescriptionGeneratorServiceImpl implements DescriptionGeneratorServ
             RestTemplate restTemplate = new RestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("x-api-key", anthropicApiKey);
-            headers.set("anthropic-version", "2023-06-01");
 
             String prompt = buildDescriptionPrompt(original, targetLanguage);
 
-            Map<String, Object> message = Map.of("role", "user", "content", prompt);
-            Map<String, Object> body = Map.of(
-                "model", CLAUDE_MODEL,
-                "max_tokens", 512,
-                "messages", List.of(message)
-            );
+            // Gemini request shape: { contents: [{ parts: [{ text }] }] }
+            Map<String, Object> part = Map.of("text", prompt);
+            Map<String, Object> content = Map.of("parts", List.of(part));
+            Map<String, Object> body = Map.of("contents", List.of(content));
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            ResponseEntity<Map> response = restTemplate.exchange(ANTHROPIC_API_URL, HttpMethod.POST, request, Map.class);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                GEMINI_API_URL + geminiApiKey, HttpMethod.POST, request, Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 @SuppressWarnings("unchecked")
-                List<Map<String, Object>> content = (List<Map<String, Object>>) response.getBody().get("content");
-                if (content != null && !content.isEmpty()) {
-                    String generated = (String) content.get(0).get("text");
-                    log.info("Claude API generated description ({} chars)", generated.length());
-                    return generated.trim();
+                List<Map<String, Object>> candidates =
+                    (List<Map<String, Object>>) response.getBody().get("candidates");
+                if (candidates != null && !candidates.isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> candidate = candidates.get(0);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> candidateContent = (Map<String, Object>) candidate.get("content");
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> parts = (List<Map<String, Object>>) candidateContent.get("parts");
+                    if (parts != null && !parts.isEmpty()) {
+                        String generated = (String) parts.get(0).get("text");
+                        log.info("Gemini API generated description ({} chars)", generated.length());
+                        return generated.trim();
+                    }
                 }
             }
+        } catch (HttpClientErrorException e) {
+            log.error("Gemini API call failed — HTTP {}: {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
-            log.error("Claude API call failed: {} — falling back to template", e.getMessage());
+            log.error("Gemini API call failed — {}: {}", e.getClass().getSimpleName(), e.getMessage());
         }
 
         return buildTemplateDescription(original, targetLanguage);

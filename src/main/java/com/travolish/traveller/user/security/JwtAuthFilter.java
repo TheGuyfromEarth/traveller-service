@@ -3,7 +3,9 @@ package com.travolish.traveller.user.security;
 import java.io.IOException;
 
 import java.util.Collections;
+import java.util.List;
 
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -36,8 +38,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (token != null) {
             try {
                 Jwt jwt = jwtDecoder.decode(token);
+                String role = jwt.getClaimAsString("role");
+                List<SimpleGrantedAuthority> authorities = (role != null && !role.isBlank())
+                        ? List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
+                        : Collections.emptyList();
                 SecurityContextHolder.getContext()
-                        .setAuthentication(new JwtAuthenticationToken(jwt, Collections.emptyList()));
+                        .setAuthentication(new JwtAuthenticationToken(jwt, authorities));
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();
                 log.debug("JWT rejected [{}]: {}", request.getRequestURI(), e.getMessage());
