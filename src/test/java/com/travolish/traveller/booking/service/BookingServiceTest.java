@@ -123,7 +123,7 @@ class BookingServiceTest {
             assertNotNull(result.getId(), "Saved booking must have a generated ID");
             assertEquals(Booking.BookingStatus.PENDING, result.getStatus());
             assertEquals(400.0, result.getTotalPrice(), "4 nights × $100 = $400 (no adjustments)");
-            verify(availabilityService).bookRoom(ROOM_ID, CHECK_IN, CHECK_OUT);
+            verify(availabilityService).bookRoom(ROOM_ID, HOTEL_ID, CHECK_IN, CHECK_OUT);
         }
 
         @Test

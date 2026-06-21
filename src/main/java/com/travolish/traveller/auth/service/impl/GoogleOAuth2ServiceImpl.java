@@ -57,7 +57,7 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                 throw new SecurityException("Invalid token format");
             }
 
-            String payload = new String(Base64.getDecoder().decode(parts[1]));
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
             JsonNode node = objectMapper.readTree(payload);
 
             GoogleOAuth2Request.GoogleUserData userData = new GoogleOAuth2Request.GoogleUserData();
@@ -159,7 +159,7 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
             }
 
             // For production: verify against Google's public keys
-            String header = new String(Base64.getDecoder().decode(parts[0]));
+            String header = new String(Base64.getUrlDecoder().decode(parts[0]));
             JsonNode headerNode = objectMapper.readTree(header);
             String kidFromToken = headerNode.get("kid").asText();
 
@@ -208,7 +208,7 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                 return false;
             }
 
-            String payload = new String(Base64.getDecoder().decode(parts[1]));
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
             JsonNode payloadNode = objectMapper.readTree(payload);
 
             // Validate essential claims
