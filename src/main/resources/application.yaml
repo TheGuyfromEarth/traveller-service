@@ -117,6 +117,9 @@ sms:
     auth-token: ${TWILIO_AUTH_TOKEN:}
     phone-number: ${TWILIO_PHONE_NUMBER:}
 
+cors:
+  allowed-origins: http://localhost:5173,http://localhost:3000,https://travolish-ten.vercel.app
+
 server:
   port: 8080
   error:

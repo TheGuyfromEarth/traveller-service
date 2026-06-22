@@ -23,7 +23,6 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class OAuth2AuthController {
 
     @Autowired
