@@ -19,6 +19,8 @@ public class ReviewDTO {
     private Long userId;
     private Long hotelId;
     private Long roomId;
+    private Long guestId;
+    private Long bookingId;
     private String title;
     private String content;
     private Integer rating;
@@ -26,6 +28,10 @@ public class ReviewDTO {
     private ReviewType reviewType;
     private Integer helpfulCount;
     private Integer unhelpfulCount;
+    // Guest-review sub-ratings
+    private Integer cleanlinessRating;
+    private Integer theftRating;
+    private Integer behaviorRating;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

@@ -34,8 +34,9 @@ public class BookingDataSeeder implements CommandLineRunner {
             h1.setRating(4.5);
             h1.setPhone("+1-555-0100");
             h1.setEmail("info@grandplaza.com");
+            h1.setState("NY");
             h1.setDescription("A luxury downtown hotel");
-            
+
             Hotel h2 = new Hotel();
             h2.setName("Seaside Resort");
             h2.setAddress("45 Ocean Ave");
@@ -44,8 +45,9 @@ public class BookingDataSeeder implements CommandLineRunner {
             h2.setRating(4.2);
             h2.setPhone("+1-555-0200");
             h2.setEmail("hello@seasideresort.com");
+            h2.setState("CA");
             h2.setDescription("Relaxing ocean views and pool");
-            
+
             Hotel h3 = new Hotel();
             h3.setName("Eiffel Tower Hotel");
             h3.setAddress("10 Rue de Rivoli");
@@ -54,8 +56,9 @@ public class BookingDataSeeder implements CommandLineRunner {
             h3.setRating(4.7);
             h3.setPhone("+33-1-5555-0100");
             h3.setEmail("info@eiffeltower.com");
+            h3.setState("Île-de-France");
             h3.setDescription("Iconic Paris hotel near Eiffel Tower");
-            
+
             Hotel h4 = new Hotel();
             h4.setName("Big Ben Hotel");
             h4.setAddress("100 Westminster");
@@ -64,6 +67,7 @@ public class BookingDataSeeder implements CommandLineRunner {
             h4.setRating(4.4);
             h4.setPhone("+44-20-5555-0100");
             h4.setEmail("info@bigbenhotel.com");
+            h4.setState("England");
             h4.setDescription("Historic London accommodation");
             
             var saved = hotelRepository.saveAll(List.of(h1, h2, h3, h4));

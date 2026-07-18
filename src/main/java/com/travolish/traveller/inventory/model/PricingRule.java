@@ -69,6 +69,13 @@ public class PricingRule {
     /** Traveller-facing promo code (e.g. WEEKEND18). Auto-generated from description when null. */
     private String promoCode;
 
+    /** §21 — Display label shown to traveller (e.g. "Free Breakfast Included", "Flash Sale – 30% Off") */
+    private String promoLabel;
+
+    /** §21 — Whether this is a non-monetary perk (FREE_UPGRADE, FREE_BREAKFAST) vs a price discount */
+    @Builder.Default
+    private Boolean nonMonetary = false;
+
     private String season; // e.g., "SUMMER", "WINTER", "HOLIDAY"
 
     @Column(nullable = false)
@@ -91,10 +98,14 @@ public class PricingRule {
         SEASONAL,       // Based on time of year
         PROMOTIONAL,    // Special promotions
         DYNAMIC,        // Based on demand/occupancy
-        EARLY_BIRD,     // Early booking discounts
-        LAST_MINUTE,    // Last-minute deals
+        EARLY_BIRD,     // Early booking discounts — §21
+        LAST_MINUTE,    // Last-minute deals — §21
         BULK,           // Group/bulk booking discounts
-        LOYALTY         // Loyalty program pricing
+        LOYALTY,        // Loyalty program pricing — §21
+        FLASH_SALE,     // Time-limited flash sale — §21
+        LONG_STAY,      // Weekly / monthly discount — §21
+        FREE_UPGRADE,   // Non-monetary: complimentary room upgrade — §21
+        FREE_BREAKFAST  // Non-monetary: complimentary breakfast included — §21
     }
 
     /**

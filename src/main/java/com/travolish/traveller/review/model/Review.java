@@ -29,6 +29,10 @@ public class Review {
 
     private Long roomId; // Optional: review can be for hotel or specific room
 
+    private Long guestId; // Populated for GUEST review type — the guest being reviewed
+
+    private Long bookingId; // Booking this review is associated with (GUEST reviews)
+
     @NotBlank(message = "Review title cannot be blank")
     @Column(nullable = false, length = 200)
     private String title;
@@ -58,6 +62,38 @@ public class Review {
 
     private OffsetDateTime reviewedAt;
 
+    // §22 — Sub-ratings (1–5 each)
+    @Min(1) @Max(5)
+    private Integer cleanlinessRating;
+
+    @Min(1) @Max(5)
+    private Integer locationRating;
+
+    @Min(1) @Max(5)
+    private Integer valueRating;
+
+    @Min(1) @Max(5)
+    private Integer staffRating;
+
+    @Min(1) @Max(5)
+    private Integer comfortRating;
+
+    // Guest-review-specific sub-ratings (host reviewing a guest)
+    @Min(1) @Max(5)
+    private Integer theftRating;      // Did the guest report any theft concerns?
+
+    @Min(1) @Max(5)
+    private Integer behaviorRating;   // Was the guest respectful and well-behaved?
+
+    // §22 — Host response
+    @Column(length = 2000)
+    private String hostResponse;
+
+    private OffsetDateTime hostResponseAt;
+
+    // §22 — Import source (e.g. "Booking.com", "Google")
+    private String importedFrom;
+
     @Builder.Default
     private Integer helpfulCount = 0;
 
@@ -86,6 +122,7 @@ public class Review {
 
     public enum ReviewType {
         HOTEL,
-        ROOM
+        ROOM,
+        GUEST   // Host reviewing a guest after a completed stay
     }
 }

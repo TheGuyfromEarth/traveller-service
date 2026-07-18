@@ -74,4 +74,16 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT COUNT(r) FROM Review r WHERE r.status = :status")
     long countByReviewStatus(@Param("status") ReviewStatus status);
+
+    // Find GUEST reviews written by a specific host (userId = hostUserId, reviewType = GUEST)
+    @Query("SELECT r FROM Review r WHERE r.userId = :hostUserId AND r.reviewType = 'GUEST' ORDER BY r.createdAt DESC")
+    Page<Review> findGuestReviewsByHost(@Param("hostUserId") Long hostUserId, Pageable pageable);
+
+    // Find GUEST reviews about a specific guest
+    @Query("SELECT r FROM Review r WHERE r.guestId = :guestId AND r.reviewType = 'GUEST' AND r.status = 'APPROVED' ORDER BY r.createdAt DESC")
+    Page<Review> findApprovedGuestReviews(@Param("guestId") Long guestId, Pageable pageable);
+
+    // Check if host already reviewed this guest for a specific booking
+    @Query("SELECT r FROM Review r WHERE r.userId = :hostUserId AND r.guestId = :guestId AND r.bookingId = :bookingId AND r.reviewType = 'GUEST' LIMIT 1")
+    Optional<Review> findHostGuestReview(@Param("hostUserId") Long hostUserId, @Param("guestId") Long guestId, @Param("bookingId") Long bookingId);
 }

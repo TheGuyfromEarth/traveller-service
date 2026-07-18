@@ -59,6 +59,30 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public ReviewDTO submitGuestReview(Long hostUserId, Long guestId, Long bookingId, ReviewDTO reviewDTO) {
+        if (reviewRepository.findHostGuestReview(hostUserId, guestId, bookingId).isPresent()) {
+            throw new InvalidReviewException("You have already reviewed this guest for booking #" + bookingId + ".");
+        }
+
+        Review review = Review.builder()
+                .userId(hostUserId)
+                .hotelId(reviewDTO.getHotelId() != null ? reviewDTO.getHotelId() : 0L)
+                .guestId(guestId)
+                .bookingId(bookingId)
+                .title(reviewDTO.getTitle())
+                .content(reviewDTO.getContent())
+                .rating(reviewDTO.getRating())
+                .cleanlinessRating(reviewDTO.getCleanlinessRating())
+                .theftRating(reviewDTO.getTheftRating())
+                .behaviorRating(reviewDTO.getBehaviorRating())
+                .reviewType(Review.ReviewType.GUEST)
+                .status(Review.ReviewStatus.PENDING)
+                .build();
+
+        return convertToDTO(reviewRepository.save(review));
+    }
+
+    @Override
     public ReviewDTO submitRoomReview(Long userId, Long hotelId, Long roomId, ReviewDTO reviewDTO) {
         // Check if user already reviewed this room
         if (reviewRepository.findUserRoomReview(userId, roomId).isPresent()) {
@@ -361,6 +385,8 @@ public class ReviewServiceImpl implements ReviewService {
                 .userId(review.getUserId())
                 .hotelId(review.getHotelId())
                 .roomId(review.getRoomId())
+                .guestId(review.getGuestId())
+                .bookingId(review.getBookingId())
                 .title(review.getTitle())
                 .content(review.getContent())
                 .rating(review.getRating())
@@ -368,6 +394,9 @@ public class ReviewServiceImpl implements ReviewService {
                 .reviewType(review.getReviewType())
                 .helpfulCount(review.getHelpfulCount())
                 .unhelpfulCount(review.getUnhelpfulCount())
+                .cleanlinessRating(review.getCleanlinessRating())
+                .theftRating(review.getTheftRating())
+                .behaviorRating(review.getBehaviorRating())
                 .createdAt(review.getCreatedAt())
                 .updatedAt(review.getUpdatedAt())
                 .build();

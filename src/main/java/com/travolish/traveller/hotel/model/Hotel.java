@@ -32,7 +32,13 @@ public class Hotel {
 
     private String city;
 
+    @NotBlank(message = "State / Province is required")
+    @Column(nullable = false)
+    private String state;
+
     private String country;
+
+    private String postalCode;
 
     private Double rating;
 
@@ -43,15 +49,93 @@ public class Hotel {
     @Column(length = 2000)
     private String description;
 
-    private String imageUrl;    // cover / primary image
+    // §5 — Basic property information
+    // Step 1 of listing wizard — top-level category (replaces legacy PropertyType)
+    @Enumerated(EnumType.STRING)
+    private PropertyCategory category;
+
+    // Step 2 — multi-select sub-types (e.g. LUXURY_HOTEL + SPA_HOTEL)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_sub_types", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sub_type")
+    private List<PropertySubType> subTypes = new ArrayList<>();
+
+    // Target guest segments (multi-select)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_target_guests", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_guest")
+    private List<TargetGuest> targetGuests = new ArrayList<>();
+
+    // Stay type
+    @Enumerated(EnumType.STRING)
+    private StayType stayType;
+
+    private Integer starRating;
+
+    // Step 3 — property dimensions
+    private Integer numBedrooms;
+
+    private Integer numBathrooms;
+
+    private Integer maxGuests;
+
+    private Integer numUnits;
+
+    private String brand;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_languages", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "language")
+    private List<String> languagesSpoken = new ArrayList<>();
+
+    private Integer yearBuilt;
+
+    private Integer lastRenovated;
+
+    // §6 — Location distances
+    private String distanceToAirport;
+
+    private String distanceToTrain;
+
+    private String distanceToCityCentre;
+
+    private String distanceToBeach;
+
+    // §7 — Property details
+    private Integer totalRooms;
+
+    private Integer totalFloors;
+
+    private Integer totalBuildings;
+
+    private String propertySize;
+
+    private String receptionHours;
+
+    private Boolean twentyFourHourFrontDesk = false;
+
+    // §13 — Photos & media
+    private String imageUrl;
+
+    private String coverPhotoTitle;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_gallery_images", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "image_url")
     private List<String> galleryImages = new ArrayList<>();
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_drone_photos", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "photo_url")
+    private List<String> dronePhotos = new ArrayList<>();
+
     private String videoUrl;
 
+    private String threeSixtyTourUrl;
+
+    // §6 — Geo
     private Double latitude;
 
     private Double longitude;
@@ -59,29 +143,72 @@ public class Hotel {
     @Column(length = 1000)
     private String houseRules;
 
+    // §10 — Availability settings
     private Boolean instantBooking = true;
 
     private Integer minimumStay = 1;
+
+    private Integer maximumStay;
+
+    private Integer bookingWindow;
+
+    private Boolean lastMinuteBooking = false;
+
+    private Boolean sameDayBooking = false;
 
     private String checkInTime;
 
     private String checkOutTime;
 
+    // §11 — Amenities
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_amenities", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "amenity")
     private List<String> amenities = new ArrayList<>();
 
+    // §14 — Meal options
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_meal_options", joinColumns = @JoinColumn(name = "hotel_id"))
     @Enumerated(EnumType.STRING)
-    @Column // nullable so Hibernate can ADD COLUMN on existing tables; SchemaMigrationRunner backfills LIVE
+    @Column(name = "meal_option")
+    private List<MealOption> mealOptions = new ArrayList<>();
+
+    // §15 — Transportation
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_transportation", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "option")
+    private List<String> transportationOptions = new ArrayList<>();
+
+    // §16 — Guest services
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_guest_services", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "service")
+    private List<String> guestServices = new ArrayList<>();
+
+    // §17 — Sustainability
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_sustainability", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "feature")
+    private List<String> sustainabilityFeatures = new ArrayList<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column
     private HotelStatus status;
 
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     public enum HotelStatus {
-        DRAFT,   // Created but not yet published
-        LIVE,    // Published and bookable
-        PAUSED   // Temporarily hidden from search
+        DRAFT,
+        LIVE,
+        PAUSED
+    }
+
+    public enum MealOption {
+        ROOM_ONLY,
+        BREAKFAST,
+        HALF_BOARD,
+        FULL_BOARD,
+        ALL_INCLUSIVE
     }
 
     @JsonIgnore

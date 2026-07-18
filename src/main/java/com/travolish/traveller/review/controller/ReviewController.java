@@ -1,5 +1,7 @@
 package com.travolish.traveller.review.controller;
 
+import java.time.OffsetDateTime;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -9,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import com.travolish.traveller.review.dto.ReviewDTO;
 import com.travolish.traveller.review.dto.ReviewModeratorDTO;
 import com.travolish.traveller.review.dto.RatingStatsDTO;
+import com.travolish.traveller.review.model.Review;
+import com.travolish.traveller.review.repository.ReviewRepository;
 import com.travolish.traveller.review.service.ReviewService;
 
 import jakarta.validation.Valid;
@@ -20,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final ReviewRepository reviewRepository;
 
     // ==================== Review Submission ====================
 
@@ -276,6 +281,49 @@ public class ReviewController {
     public ResponseEntity<ReviewDTO> markUnhelpful(@PathVariable Long reviewId) {
         ReviewDTO review = reviewService.markUnhelpful(reviewId);
         return ResponseEntity.ok(review);
+    }
+
+    // ==================== Host-to-Guest Reviews ====================
+
+    /**
+     * Host submits a review for a guest after a completed booking.
+     * Uses X-Host-Id header (the host's userId) so the same JWT filter flow applies.
+     */
+    @PostMapping("/guests/{guestId}")
+    public ResponseEntity<ReviewDTO> submitGuestReview(
+            @RequestHeader("X-Host-Id") Long hostUserId,
+            @PathVariable Long guestId,
+            @RequestParam Long bookingId,
+            @Valid @RequestBody ReviewDTO reviewDTO) {
+        ReviewDTO created = reviewService.submitGuestReview(hostUserId, guestId, bookingId, reviewDTO);
+        return new ResponseEntity<>(created, HttpStatus.CREATED);
+    }
+
+    /**
+     * Get approved guest reviews for a specific guest (visible to admins / the guest themselves).
+     */
+    @GetMapping("/guests/{guestId}")
+    public ResponseEntity<Page<ReviewDTO>> getGuestReviews(
+            @PathVariable Long guestId,
+            Pageable pageable) {
+        Page<ReviewDTO> reviews = reviewRepository.findApprovedGuestReviews(guestId, pageable)
+                .map(review -> reviewService.getReviewById(review.getId()));
+        return ResponseEntity.ok(reviews);
+    }
+
+    // ==================== §22 Host Response ====================
+
+    @PostMapping("/{reviewId}/respond")
+    public ResponseEntity<ReviewDTO> hostRespond(
+            @PathVariable Long reviewId,
+            @RequestParam String response,
+            @RequestHeader("X-Host-Id") Long hostId) {
+        Review review = reviewRepository.findById(reviewId)
+            .orElseThrow(() -> new RuntimeException("Review not found: " + reviewId));
+        review.setHostResponse(response);
+        review.setHostResponseAt(OffsetDateTime.now());
+        reviewRepository.save(review);
+        return ResponseEntity.ok(reviewService.getReviewById(reviewId));
     }
 
     // ==================== Review Eligibility ====================

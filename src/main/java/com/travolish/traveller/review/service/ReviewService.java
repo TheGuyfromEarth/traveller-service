@@ -12,6 +12,8 @@ public interface ReviewService {
     // Review submission and retrieval
     ReviewDTO submitHotelReview(Long userId, Long hotelId, ReviewDTO reviewDTO);
 
+    ReviewDTO submitGuestReview(Long hostUserId, Long guestId, Long bookingId, ReviewDTO reviewDTO);
+
     ReviewDTO submitRoomReview(Long userId, Long hotelId, Long roomId, ReviewDTO reviewDTO);
 
     ReviewDTO getReviewById(Long reviewId);
