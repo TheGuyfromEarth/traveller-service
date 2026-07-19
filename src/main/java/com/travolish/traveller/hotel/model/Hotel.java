@@ -32,8 +32,7 @@ public class Hotel {
 
     private String city;
 
-    @NotBlank(message = "State / Province is required")
-    @Column(nullable = false)
+    // Optional at quick-create time; filled in via the Location tab in the listing editor
     private String state;
 
     private String country;

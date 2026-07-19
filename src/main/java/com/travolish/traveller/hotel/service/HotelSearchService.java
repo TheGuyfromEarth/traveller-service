@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +28,10 @@ public class HotelSearchService {
         this.hotelRepository = hotelRepository;
     }
 
+    // HotelSearchRequest is a Lombok @Data class — equals/hashCode cover all fields,
+    // so Spring's default SimpleKeyGenerator produces a correct per-combination key.
+    // Cache is evicted by HotelServiceImpl on any create / update / delete.
+    @Cacheable(value = "hotel-search")
     @Transactional(readOnly = true)
     public Page<HotelSearchResponse> searchHotels(HotelSearchRequest searchRequest) {
         Specification<Hotel> spec = buildSpecification(searchRequest);

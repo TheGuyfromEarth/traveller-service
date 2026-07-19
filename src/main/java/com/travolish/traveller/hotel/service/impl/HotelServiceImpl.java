@@ -12,6 +12,7 @@ import com.travolish.traveller.notifications.entity.NotificationType;
 import com.travolish.traveller.notifications.service.NotificationService;
 import com.travolish.traveller.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -45,6 +46,7 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Hotel create(Hotel hotel) {
         hotel.setId(null);
         if (hotel.getName() == null || hotel.getName().isBlank()) {
@@ -86,6 +88,7 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Optional<Hotel> update(Long id, Hotel hotel) {
         return hotelRepository.findById(id).map(existing -> {
             if (hotel.getHostId() != null) existing.setHostId(hotel.getHostId());
@@ -110,16 +113,19 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public void delete(Long id) {
         hotelRepository.deleteById(id);
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Hotel save(Hotel hotel) {
         return hotelRepository.save(hotel);
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Optional<Hotel> updateImageUrl(Long id, String imageUrl) {
         return hotelRepository.findById(id).map(existing -> {
             existing.setImageUrl(imageUrl);
@@ -128,6 +134,7 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Optional<Hotel> updateVideoUrl(Long id, String videoUrl) {
         return hotelRepository.findById(id).map(existing -> {
             existing.setVideoUrl(videoUrl);

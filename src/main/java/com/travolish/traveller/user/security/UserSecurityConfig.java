@@ -83,6 +83,10 @@ public class UserSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/addons/**").permitAll()
                         // Admin-only
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // Any authenticated user can create their first listing (POST /api/hotels exact path).
+                        // HotelServiceImpl.create() promotes the user to HOST role in the DB.
+                        // Sub-resource operations on existing hotels still require HOST or ADMIN.
+                        .requestMatchers(HttpMethod.POST, "/api/hotels").authenticated()
                         // Host + admin
                         .requestMatchers(HttpMethod.POST, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")
