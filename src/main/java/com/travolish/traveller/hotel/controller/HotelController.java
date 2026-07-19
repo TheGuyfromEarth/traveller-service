@@ -6,6 +6,8 @@ import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.service.HotelService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,7 +38,11 @@ public class HotelController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Hotel create(@Validated @RequestBody Hotel hotel) {
+    public Hotel create(@Validated @RequestBody Hotel hotel, Authentication authentication) {
+        if (hotel.getHostId() == null && authentication != null) {
+            Jwt jwt = (Jwt) authentication.getPrincipal();
+            hotel.setHostId(Long.parseLong(jwt.getSubject()));
+        }
         return hotelService.create(hotel);
     }
 
