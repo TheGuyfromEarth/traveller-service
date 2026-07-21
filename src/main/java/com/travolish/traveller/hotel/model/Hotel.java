@@ -12,7 +12,14 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.travolish.traveller.review.model.Review;
 
 @Entity
-@Table(name = "hotels")
+@Table(name = "hotels", indexes = {
+    @Index(name = "idx_hotels_host_id",   columnList = "hostId"),
+    @Index(name = "idx_hotels_status",    columnList = "status"),
+    @Index(name = "idx_hotels_city",      columnList = "city"),
+    @Index(name = "idx_hotels_country",   columnList = "country"),
+    @Index(name = "idx_hotels_rating",    columnList = "rating"),
+    @Index(name = "idx_hotels_lat_lng",   columnList = "latitude,longitude"),
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -199,7 +206,8 @@ public class Hotel {
     public enum HotelStatus {
         DRAFT,
         LIVE,
-        PAUSED
+        PAUSED,
+        PENDING_REVIEW
     }
 
     public enum MealOption {

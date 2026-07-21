@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
@@ -21,11 +22,13 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class UserService {
 
     private final UserRepository userRepository;
     private final NotificationService notificationService;
 
+    @Transactional
     public UserDTO createUser(UserDTO userDTO) {
         if (userRepository.existsByEmail(userDTO.getEmail())) {
             throw new UserAlreadyExistsException("User with email " + userDTO.getEmail() + " already exists");
@@ -73,6 +76,7 @@ public class UserService {
         return users.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
+    @Transactional
     public UserDTO updateUser(Long id, UserDTO userDTO) {
         User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
@@ -94,6 +98,7 @@ public class UserService {
         return convertToDTO(updatedUser);
     }
 
+    @Transactional
     public UserDTO updateUserStatus(Long id, String status) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
@@ -101,6 +106,7 @@ public class UserService {
         return convertToDTO(userRepository.save(user));
     }
 
+    @Transactional
     public UserDTO updateUserRole(Long id, String role) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
@@ -108,6 +114,7 @@ public class UserService {
         return convertToDTO(userRepository.save(user));
     }
 
+    @Transactional
     public void deleteUser(Long id) {
         if (!userRepository.existsById(id)) {
             throw new UserNotFoundException("User not found with id: " + id);
@@ -124,6 +131,7 @@ public class UserService {
      *  2. Match by email       — backfills supabaseId for pre-migration accounts
      *  3. Create new record    — first-ever login
      */
+    @Transactional
     public UserDTO findOrCreateFromJwt(String supabaseId, String email, String firstName, String lastName) {
         return userRepository.findBySupabaseId(supabaseId)
                 .map(this::convertToDTO)

@@ -15,6 +15,9 @@ import com.travolish.traveller.notifications.repository.NotificationTemplateRepo
 import com.travolish.traveller.notifications.repository.UserNotificationPreferenceRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
@@ -37,27 +40,30 @@ public class NotificationService {
     private final EmailService emailService;
     private final SmsService smsService;
     private final ModelMapper modelMapper;
-    
+    private final ApplicationContext applicationContext;
+
     public NotificationService(
             NotificationRepository notificationRepository,
             NotificationTemplateRepository templateRepository,
             UserNotificationPreferenceRepository preferenceRepository,
             EmailService emailService,
             SmsService smsService,
-            ModelMapper modelMapper) {
+            ModelMapper modelMapper,
+            ApplicationContext applicationContext) {
         this.notificationRepository = notificationRepository;
         this.templateRepository = templateRepository;
         this.preferenceRepository = preferenceRepository;
         this.emailService = emailService;
         this.smsService = smsService;
         this.modelMapper = modelMapper;
+        this.applicationContext = applicationContext;
     }
     
     /**
      * Fire-and-forget async wrapper used by internal callers (booking, user creation).
      * Failures are logged but never propagated to the calling thread.
      */
-    @Async
+    @Async("notificationExecutor")
     public void sendNotificationAsync(SendNotificationRequest request) {
         try {
             sendNotification(request);
@@ -164,18 +170,20 @@ public class NotificationService {
     }
     
     /**
-     * Get all notification templates
+     * Get all notification templates — cached for 10 min (templates change rarely).
      */
+    @Cacheable("notification-templates")
     public List<NotificationTemplateDTO> getAllTemplates() {
         List<NotificationTemplate> templates = templateRepository.findAll();
         return templates.stream()
             .map(t -> modelMapper.map(t, NotificationTemplateDTO.class))
             .collect(Collectors.toList());
     }
-    
+
     /**
-     * Get active notification templates
+     * Get active notification templates — cached for 10 min.
      */
+    @Cacheable(value = "notification-templates", key = "'active'")
     public List<NotificationTemplateDTO> getActiveTemplates() {
         List<NotificationTemplate> templates = templateRepository.findByIsActiveTrue();
         return templates.stream()
@@ -195,6 +203,7 @@ public class NotificationService {
     /**
      * Create or update notification template
      */
+    @CacheEvict(value = "notification-templates", allEntries = true)
     public NotificationTemplateDTO createTemplate(NotificationTemplateDTO dto) {
         NotificationTemplate template = new NotificationTemplate();
         template.setType(dto.getType());
@@ -258,29 +267,45 @@ public class NotificationService {
      * Process scheduled notifications
      * Runs every minute
      */
-    @Scheduled(fixedRate = 60000) // Every 60 seconds
+    @Scheduled(fixedRate = 60000)
     public void processScheduledNotifications() {
         log.debug("Processing scheduled notifications...");
         try {
             LocalDateTime now = LocalDateTime.now();
             List<Notification> scheduled = notificationRepository.findScheduledNotificationsToSend(now);
-            
+            if (scheduled.isEmpty()) return;
+
+            log.info("Dispatching {} scheduled notification(s) asynchronously", scheduled.size());
+            // Mark PENDING in bulk before dispatching so another scheduler run doesn't re-pick them
             for (Notification notification : scheduled) {
-                try {
-                    processNotification(notification, null);
-                    notification.setStatus(NotificationStatus.SENT);
-                    notification.setSentTime(LocalDateTime.now());
-                } catch (Exception e) {
-                    log.error("Failed to process scheduled notification {}: {}", notification.getId(), e.getMessage());
-                    notification.setStatus(NotificationStatus.FAILED);
-                    notification.setErrorMessage(e.getMessage());
-                    notification.setRetryCount(notification.getRetryCount() + 1);
-                }
-                notificationRepository.save(notification);
+                notification.setStatus(NotificationStatus.PENDING);
+            }
+            notificationRepository.saveAll(scheduled);
+            // Use proxy so @Async AOP interceptor is active (self-invocation bypasses the proxy)
+            NotificationService proxy = applicationContext.getBean(NotificationService.class);
+            for (Notification notification : scheduled) {
+                proxy.dispatchScheduledNotification(notification.getId());
             }
         } catch (Exception e) {
             log.error("Error processing scheduled notifications: {}", e.getMessage(), e);
         }
+    }
+
+    @Async("notificationExecutor")
+    public void dispatchScheduledNotification(Long notificationId) {
+        notificationRepository.findById(notificationId).ifPresent(notification -> {
+            try {
+                processNotification(notification, null);
+                notification.setStatus(NotificationStatus.SENT);
+                notification.setSentTime(LocalDateTime.now());
+            } catch (Exception e) {
+                log.error("Failed to process scheduled notification {}: {}", notificationId, e.getMessage());
+                notification.setStatus(NotificationStatus.FAILED);
+                notification.setErrorMessage(e.getMessage());
+                notification.setRetryCount(notification.getRetryCount() + 1);
+            }
+            notificationRepository.save(notification);
+        });
     }
     
     /**
@@ -295,7 +320,8 @@ public class NotificationService {
             Page<Notification> failed = notificationRepository.findByStatusAndRetryCountLessThan(
                 NotificationStatus.FAILED, 3, pageable);
             
-            for (Notification notification : failed.getContent()) {
+            List<Notification> toSave = new ArrayList<>(failed.getContent());
+            for (Notification notification : toSave) {
                 try {
                     processNotification(notification, null);
                     notification.setStatus(NotificationStatus.SENT);
@@ -307,8 +333,8 @@ public class NotificationService {
                         notification.setStatus(NotificationStatus.FAILED);
                     }
                 }
-                notificationRepository.save(notification);
             }
+            notificationRepository.saveAll(toSave);
         } catch (Exception e) {
             log.error("Error retrying failed notifications: {}", e.getMessage(), e);
         }

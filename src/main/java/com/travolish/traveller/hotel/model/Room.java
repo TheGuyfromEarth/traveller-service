@@ -12,7 +12,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.travolish.traveller.review.model.Review;
 
 @Entity
-@Table(name = "rooms")
+@Table(name = "rooms", indexes = {
+    @Index(name = "idx_rooms_hotel_id", columnList = "hotel_id"),
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -56,13 +58,13 @@ public class Room {
     private Boolean privateBathroom = true;
 
     // §8 — Photos
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "room_photos", joinColumns = @JoinColumn(name = "room_id"))
     @Column(name = "photo_url")
     private List<String> photos = new ArrayList<>();
 
     // §23 — Room-level amenities
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "room_amenities", joinColumns = @JoinColumn(name = "room_id"))
     @Column(name = "amenity")
     private List<String> amenities = new ArrayList<>();

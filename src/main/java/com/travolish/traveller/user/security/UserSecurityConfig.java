@@ -44,7 +44,7 @@ public class UserSecurityConfig {
 
     @Bean
     public JwtDecoder jwtDecoder(
-            @Value("${jwt.secret:travolish-secret-key-for-oauth2-authentication-tokens-please-change-in-production}") String jwtSecret) {
+            @Value("${jwt.secret}") String jwtSecret) {
         SecretKeySpec key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA512");
         return NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS512)
@@ -102,6 +102,9 @@ public class UserSecurityConfig {
                         .requestMatchers("/api/promotions/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/pricing/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/auto-replies/**").hasAnyRole("HOST", "ADMIN")
+                        // Analytics: host/admin only; inventory: any authenticated user
+                        .requestMatchers("/api/analytics/**").hasAnyRole("HOST", "ADMIN")
+                        .requestMatchers("/api/inventory/**").authenticated()
                         // Authenticated users (any role)
                         .requestMatchers("/api/users/me").authenticated()
                         .requestMatchers("/api/users/**").authenticated()

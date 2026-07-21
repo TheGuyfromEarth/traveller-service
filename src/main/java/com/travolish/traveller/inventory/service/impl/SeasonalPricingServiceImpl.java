@@ -82,6 +82,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PricingRuleDTO getPricingRule(Long ruleId) {
         return pricingRuleRepository.findById(ruleId)
             .map(this::convertToDTO)
@@ -89,6 +90,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PricingRuleDTO> getActivePricingRulesForRoom(Long roomId) {
         return pricingRuleRepository.findByRoomIdAndIsActiveTrue(roomId)
             .stream()
@@ -97,6 +99,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PricingRuleDTO> getActivePricingRulesForHotel(Long hotelId) {
         return pricingRuleRepository.findByHotelIdAndIsActiveTrue(hotelId)
             .stream()
@@ -105,6 +108,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PricingRuleDTO> getApplicableRulesForDate(Long roomId, LocalDate date) {
         return pricingRuleRepository.findApplicableRulesForDate(roomId, date)
             .stream()
@@ -113,6 +117,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PricingRuleDTO> getApplicableRulesForDateRange(
         Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
         
@@ -123,6 +128,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Double calculateFinalPrice(Long roomId, LocalDate date, Double basePrice) {
         List<PricingRule> rules = pricingRuleRepository.findApplicableRulesForDate(roomId, date);
 
@@ -153,18 +159,37 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Double calculatePriceForDateRange(
         Long roomId, LocalDate checkInDate, LocalDate checkOutDate, Double basePrice) {
-        
+
+        // Fetch ALL applicable rules for the whole stay in ONE query instead of one per night
+        List<PricingRule> rangeRules =
+            pricingRuleRepository.findRulesForDateRange(roomId, checkInDate, checkOutDate);
+        rangeRules.sort(Comparator.comparingInt(PricingRule::getPriority));
+
         double totalPrice = 0;
         LocalDate current = checkInDate;
-
         while (current.isBefore(checkOutDate)) {
-            totalPrice += calculateFinalPrice(roomId, current, basePrice);
+            totalPrice += applyRulesInMemory(current, basePrice, rangeRules);
             current = current.plusDays(1);
         }
-
         return totalPrice;
+    }
+
+    /** Apply pre-fetched, priority-sorted rules to a single date, entirely in-memory. */
+    private double applyRulesInMemory(LocalDate date, double basePrice, List<PricingRule> sortedRules) {
+        double price = basePrice;
+        for (PricingRule rule : sortedRules) {
+            if (!rule.getIsActive()) continue;
+            if (date.isBefore(rule.getStartDate()) || date.isAfter(rule.getEndDate())) continue;
+            price = switch (rule.getPricingType()) {
+                case FLAT       -> rule.getBasePrice();
+                case PERCENTAGE -> basePrice * (rule.getMultiplier() != null ? rule.getMultiplier() : 1.0);
+                case DISCOUNT   -> Math.max(0, basePrice - (rule.getFixedDiscount() != null ? rule.getFixedDiscount() : 0));
+            };
+        }
+        return price;
     }
 
     @Override
@@ -292,11 +317,13 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Boolean hasOverlappingRules(Long roomId, LocalDate startDate, LocalDate endDate) {
         return !pricingRuleRepository.findOverlappingRules(roomId, RuleType.SEASONAL, startDate, endDate).isEmpty();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PricingRuleDTO> getOverlappingRules(Long roomId, LocalDate startDate, LocalDate endDate) {
         return pricingRuleRepository.findOverlappingRules(roomId, RuleType.SEASONAL, startDate, endDate)
             .stream()
@@ -311,6 +338,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PricingRuleDTO> getPricingRulesByType(String ruleType) {
         return pricingRuleRepository.findByRuleTypeAndIsActiveTrue(RuleType.valueOf(ruleType))
             .stream()
@@ -319,6 +347,7 @@ public class SeasonalPricingServiceImpl implements SeasonalPricingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Double calculateFinalPriceWithPriority(Long roomId, LocalDate date, Double basePrice) {
         var highestPriorityRule = pricingRuleRepository.findHighestPriorityRuleForDate(roomId, date);
         

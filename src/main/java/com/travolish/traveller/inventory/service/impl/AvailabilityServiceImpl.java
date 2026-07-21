@@ -65,9 +65,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
 
     @Override
     public List<AvailabilityCheckDTO> findAvailableRoomsOnDate(Long hotelId, LocalDate date) {
-        return availabilityRepository.findAvailableRoomsOnDate(date)
+        return availabilityRepository.findAvailableRoomsOnDateAndHotelId(date, hotelId)
             .stream()
-            .filter(a -> a.getHotelId().equals(hotelId))
             .map(this::convertToDTO)
             .collect(Collectors.toList());
     }
@@ -104,10 +103,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
             toBook.add(rec);
         }
 
-        toBook.forEach(availability -> {
-            availability.addBooking();
-            availabilityRepository.save(availability);
-        });
+        toBook.forEach(RoomAvailability::addBooking);
+        availabilityRepository.saveAll(toBook);
     }
 
     @Override
@@ -116,10 +113,8 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         List<RoomAvailability> availabilities = availabilityRepository
             .findByRoomIdAndAvailabilityDateBetween(roomId, checkInDate, checkOutDate.minusDays(1));
 
-        availabilities.forEach(availability -> {
-            availability.removeBooking();
-            availabilityRepository.save(availability);
-        });
+        availabilities.forEach(RoomAvailability::removeBooking);
+        availabilityRepository.saveAll(availabilities);
     }
 
     @Override
@@ -164,13 +159,20 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     @Transactional
     public void initializeRoomAvailability(Long hotelId, Long roomId, Integer roomCount, Integer daysAhead) {
         LocalDate today = LocalDate.now();
-        
+        LocalDate endDate = today.plusDays(daysAhead - 1);
+
+        // Fetch existing dates in one query so we can skip them
+        List<RoomAvailability> existing =
+            availabilityRepository.findByRoomIdAndAvailabilityDateBetween(roomId, today, endDate);
+        java.util.Set<LocalDate> alreadyExists = existing.stream()
+            .map(RoomAvailability::getAvailabilityDate)
+            .collect(Collectors.toSet());
+
+        List<RoomAvailability> toCreate = new ArrayList<>();
         for (int i = 0; i < daysAhead; i++) {
             LocalDate date = today.plusDays(i);
-            
-            var existing = availabilityRepository.findByRoomIdAndAvailabilityDate(roomId, date);
-            if (existing.isEmpty()) {
-                RoomAvailability availability = RoomAvailability.builder()
+            if (!alreadyExists.contains(date)) {
+                toCreate.add(RoomAvailability.builder()
                     .roomId(roomId)
                     .hotelId(hotelId)
                     .availabilityDate(date)
@@ -178,10 +180,11 @@ public class AvailabilityServiceImpl implements AvailabilityService {
                     .bookedRooms(0)
                     .availableRooms(roomCount)
                     .blockedRooms(0)
-                    .build();
-                
-                availabilityRepository.save(availability);
+                    .build());
             }
+        }
+        if (!toCreate.isEmpty()) {
+            availabilityRepository.saveAll(toCreate);
         }
     }
 

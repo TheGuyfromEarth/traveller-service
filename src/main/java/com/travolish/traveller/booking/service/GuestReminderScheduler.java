@@ -17,7 +17,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Sends timed guest reminders by creating Notification records that
@@ -43,25 +45,15 @@ public class GuestReminderScheduler {
         LocalDate today = LocalDate.now();
         LocalDate dayAfterTomorrow = today.plusDays(2);
 
-        // Pre-arrival: check-in exactly 48 h from now
-        List<Booking> preArrival = bookingRepository.findAll().stream()
-            .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED
-                      && dayAfterTomorrow.equals(b.getCheckInDate()))
-            .toList();
-        preArrival.forEach(b -> sendReminder(b, NotificationType.BOOKING_REMINDER,
-            "Your check-in is in 2 days!",
-            buildPreArrivalBody(b)));
-        log.info("GuestReminderScheduler: sent {} pre-arrival reminder(s)", preArrival.size());
+        // Pre-arrival: check-in exactly 48 h from now — DB-filtered, no findAll()
+        List<Booking> preArrival = bookingRepository
+            .findByStatusAndCheckInDate(Booking.BookingStatus.CONFIRMED, dayAfterTomorrow);
+        sendBatch(preArrival, NotificationType.BOOKING_REMINDER, "Your check-in is in 2 days!", "pre-arrival");
 
         // Check-in day note
-        List<Booking> checkInToday = bookingRepository.findAll().stream()
-            .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED
-                      && today.equals(b.getCheckInDate()))
-            .toList();
-        checkInToday.forEach(b -> sendReminder(b, NotificationType.CHECK_IN_REMINDER,
-            "Today is your check-in day!",
-            buildCheckInBody(b)));
-        log.info("GuestReminderScheduler: sent {} check-in day reminder(s)", checkInToday.size());
+        List<Booking> checkInToday = bookingRepository
+            .findByStatusAndCheckInDate(Booking.BookingStatus.CONFIRMED, today);
+        sendBatch(checkInToday, NotificationType.CHECK_IN_REMINDER, "Today is your check-in day!", "check-in day");
     }
 
     /** Checkout reminders sent at 18:00 the evening before checkout. */
@@ -69,43 +61,69 @@ public class GuestReminderScheduler {
     public void sendEveningCheckoutReminders() {
         LocalDate tomorrow = LocalDate.now().plusDays(1);
 
-        List<Booking> checkOutTomorrow = bookingRepository.findAll().stream()
-            .filter(b -> (b.getStatus() == Booking.BookingStatus.CONFIRMED
-                       || b.getStatus() == Booking.BookingStatus.COMPLETED)
-                      && tomorrow.equals(b.getCheckOutDate()))
-            .toList();
-        checkOutTomorrow.forEach(b -> sendReminder(b, NotificationType.CHECK_OUT_REMINDER,
-            "Checkout is tomorrow — see you again soon!",
-            buildCheckOutBody(b)));
-        log.info("GuestReminderScheduler: sent {} checkout reminder(s)", checkOutTomorrow.size());
+        List<Booking> checkOutTomorrow = bookingRepository
+            .findByStatusInAndCheckOutDate(
+                List.of(Booking.BookingStatus.CONFIRMED, Booking.BookingStatus.COMPLETED),
+                tomorrow);
+        sendBatch(checkOutTomorrow, NotificationType.CHECK_OUT_REMINDER,
+            "Checkout is tomorrow — see you again soon!", "checkout");
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
-    private void sendReminder(Booking booking, NotificationType type, String subject, String body) {
-        try {
-            Optional<User> userOpt = userRepository.findById(booking.getId());
-            String recipientEmail = userOpt.map(User::getEmail).orElse(booking.getGuestEmail());
-            if (recipientEmail == null || recipientEmail.isBlank()) return;
-
-            SendNotificationRequest req = new SendNotificationRequest();
-            req.setUserId(booking.getId());
-            req.setType(type);
-            req.setChannel(NotificationChannel.EMAIL);
-            req.setRecipientEmail(recipientEmail);
-            req.setSubject(subject);
-            req.setMessage(body);
-            req.setSendImmediately(true);
-            notificationService.sendNotificationAsync(req);
-        } catch (Exception e) {
-            log.warn("GuestReminderScheduler: could not send {} for booking {}: {}",
-                type, booking.getId(), e.getMessage());
+    /** Batch-send reminders for a list of bookings. Pre-fetches hotel names to avoid N+1. */
+    private void sendBatch(List<Booking> bookings, NotificationType type, String subject, String kind) {
+        if (bookings.isEmpty()) {
+            log.info("GuestReminderScheduler: no {} reminders to send", kind);
+            return;
         }
+
+        // Batch-fetch hotel names — one query for all hotel IDs in this batch
+        Set<Long> hotelIds = bookings.stream().map(Booking::getHotelId).collect(Collectors.toSet());
+        Map<Long, String> hotelNames = hotelRepository.findAllById(hotelIds).stream()
+            .collect(Collectors.toMap(Hotel::getId, Hotel::getName));
+
+        int sent = 0;
+        for (Booking b : bookings) {
+            try {
+                String hotelName = hotelNames.getOrDefault(b.getHotelId(), "your accommodation");
+                String body = switch (type) {
+                    case BOOKING_REMINDER -> buildPreArrivalBody(b, hotelName);
+                    case CHECK_IN_REMINDER -> buildCheckInBody(b, hotelName);
+                    case CHECK_OUT_REMINDER -> buildCheckOutBody(b, hotelName);
+                    default -> b.getGuestName() + ", this is a reminder about your stay at " + hotelName + ".";
+                };
+
+                // Fix: look up by userId, not booking id; fall back to guestEmail for anonymous bookings
+                String recipientEmail;
+                if (b.getUserId() != null) {
+                    recipientEmail = userRepository.findById(b.getUserId())
+                        .map(User::getEmail)
+                        .orElse(b.getGuestEmail());
+                } else {
+                    recipientEmail = b.getGuestEmail();
+                }
+                if (recipientEmail == null || recipientEmail.isBlank()) continue;
+
+                SendNotificationRequest req = new SendNotificationRequest();
+                req.setUserId(b.getUserId());      // correctly uses userId, not booking id
+                req.setType(type);
+                req.setChannel(NotificationChannel.EMAIL);
+                req.setRecipientEmail(recipientEmail);
+                req.setSubject(subject);
+                req.setMessage(body);
+                req.setSendImmediately(true);
+                notificationService.sendNotificationAsync(req);
+                sent++;
+            } catch (Exception e) {
+                log.warn("GuestReminderScheduler: could not send {} reminder for booking {}: {}",
+                    kind, b.getId(), e.getMessage());
+            }
+        }
+        log.info("GuestReminderScheduler: sent {} {} reminder(s)", sent, kind);
     }
 
-    private String buildPreArrivalBody(Booking b) {
-        String hotel = hotelRepository.findById(b.getHotelId())
-            .map(Hotel::getName).orElse("your accommodation");
+    private String buildPreArrivalBody(Booking b, String hotel) {
         return String.format("""
             Hi %s,
 
@@ -119,13 +137,11 @@ public class GuestReminderScheduler {
             """, b.getGuestName(), hotel, b.getCheckInDate());
     }
 
-    private String buildCheckInBody(Booking b) {
-        String hotel = hotelRepository.findById(b.getHotelId())
-            .map(Hotel::getName).orElse("your accommodation");
+    private String buildCheckInBody(Booking b, String hotel) {
         return String.format("""
             Hi %s,
 
-            Today is your check-in day at %s! 🎉
+            Today is your check-in day at %s!
 
             If you have any issues on arrival, contact your host directly through the Travolish app.
 
@@ -134,9 +150,7 @@ public class GuestReminderScheduler {
             """, b.getGuestName(), hotel);
     }
 
-    private String buildCheckOutBody(Booking b) {
-        String hotel = hotelRepository.findById(b.getHotelId())
-            .map(Hotel::getName).orElse("your accommodation");
+    private String buildCheckOutBody(Booking b, String hotel) {
         return String.format("""
             Hi %s,
 

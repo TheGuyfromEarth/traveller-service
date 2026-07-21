@@ -13,7 +13,10 @@ import com.travolish.traveller.notifications.service.NotificationService;
 import com.travolish.traveller.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -31,28 +34,33 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Hotel> findAll() {
         return hotelRepository.findAll();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Hotel> findByHostId(Long hostId) {
         return hotelRepository.findByHostId(hostId);
     }
 
     @Override
+    @Transactional(readOnly = true)
+    @Cacheable(value = "hotels", key = "#id")
     public Optional<Hotel> findById(Long id) {
         return hotelRepository.findById(id);
     }
 
     @Override
+    @Transactional
     @CacheEvict(value = "hotel-search", allEntries = true)
     public Hotel create(Hotel hotel) {
         hotel.setId(null);
         if (hotel.getName() == null || hotel.getName().isBlank()) {
             throw new IllegalArgumentException("Hotel name is required and must not be blank");
         }
-        if (hotel.getStatus() == null) hotel.setStatus(Hotel.HotelStatus.LIVE);
+        hotel.setStatus(Hotel.HotelStatus.PENDING_REVIEW);
         Hotel saved = hotelRepository.save(hotel);
         // Promote the host user to HOST role on first listing and send listing notification
         if (hotel.getHostId() != null) {
@@ -70,13 +78,13 @@ public class HotelServiceImpl implements HotelService {
                     req.setRecipientEmail(host.getEmail());
                     req.setHotelId(saved.getId());
                     req.setSendImmediately(true);
-                    req.setSubject("Your listing is live — " + saved.getName());
+                    req.setSubject("Listing submitted for review — " + saved.getName());
                     req.setMessage("Hi " + (host.getFirstName() != null ? host.getFirstName() : "Host") + ",\n\n"
-                            + "Your property \"" + saved.getName() + "\" has been listed on Travolish.\n\n"
+                            + "Your property \"" + saved.getName() + "\" has been submitted to Travolish and is now pending admin review.\n\n"
                             + "Location: " + (saved.getCity() != null ? saved.getCity() : "—") + "\n"
-                            + "Status:   " + saved.getStatus() + "\n\n"
-                            + "Travellers can now discover and book your property. "
-                            + "Make sure your availability calendar and room details are complete.\n\n"
+                            + "Status:   Pending Review\n\n"
+                            + "Our team will review your listing shortly. Once approved it will be visible to travellers.\n"
+                            + "Make sure your availability calendar and room details are complete in the meantime.\n\n"
                             + "— The Travolish Team");
                     notificationService.sendNotificationAsync(req);
                 } catch (Exception e) {
@@ -88,7 +96,11 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
-    @CacheEvict(value = "hotel-search", allEntries = true)
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
     public Optional<Hotel> update(Long id, Hotel hotel) {
         return hotelRepository.findById(id).map(existing -> {
             if (hotel.getHostId() != null) existing.setHostId(hotel.getHostId());
@@ -113,19 +125,28 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
-    @CacheEvict(value = "hotel-search", allEntries = true)
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
     public void delete(Long id) {
         hotelRepository.deleteById(id);
     }
 
     @Override
+    @Transactional
     @CacheEvict(value = "hotel-search", allEntries = true)
     public Hotel save(Hotel hotel) {
         return hotelRepository.save(hotel);
     }
 
     @Override
-    @CacheEvict(value = "hotel-search", allEntries = true)
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
     public Optional<Hotel> updateImageUrl(Long id, String imageUrl) {
         return hotelRepository.findById(id).map(existing -> {
             existing.setImageUrl(imageUrl);
@@ -134,10 +155,33 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
-    @CacheEvict(value = "hotel-search", allEntries = true)
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
     public Optional<Hotel> updateVideoUrl(Long id, String videoUrl) {
         return hotelRepository.findById(id).map(existing -> {
             existing.setVideoUrl(videoUrl);
+            return hotelRepository.save(existing);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Hotel> findByStatus(Hotel.HotelStatus status) {
+        return hotelRepository.findByStatus(status);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
+    public Optional<Hotel> updateStatus(Long id, Hotel.HotelStatus status) {
+        return hotelRepository.findById(id).map(existing -> {
+            existing.setStatus(status);
             return hotelRepository.save(existing);
         });
     }

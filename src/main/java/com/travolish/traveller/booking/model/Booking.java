@@ -8,7 +8,14 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 @Entity
-@Table(name = "bookings")
+@Table(name = "bookings", indexes = {
+    @Index(name = "idx_bookings_room_id",       columnList = "roomId"),
+    @Index(name = "idx_bookings_hotel_id",      columnList = "hotelId"),
+    @Index(name = "idx_bookings_user_id",       columnList = "userId"),
+    @Index(name = "idx_bookings_status",        columnList = "status"),
+    @Index(name = "idx_bookings_check_in",      columnList = "checkInDate"),
+    @Index(name = "idx_bookings_check_out",     columnList = "checkOutDate"),
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

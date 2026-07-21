@@ -55,11 +55,13 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findAll() {
         return bookingRepository.findAll();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Booking> findById(Long id) {
         return bookingRepository.findById(id);
     }
@@ -72,20 +74,7 @@ public class BookingServiceImpl implements BookingService {
             booking.setStatus(Booking.BookingStatus.PENDING);
         }
 
-        // 1. Check availability for the date range
-        Boolean isAvailable = availabilityService.isRoomAvailableForDateRange(
-            booking.getRoomId(), 
-            booking.getCheckInDate(), 
-            booking.getCheckOutDate()
-        );
-        
-        if (!isAvailable) {
-            throw new InsufficientAvailabilityException(
-                "Room " + booking.getRoomId() + " is not available for the requested dates"
-            );
-        }
-        
-        // 2. Check for conflicts/overbooking
+        // Check for conflicts/overbooking (subsumes the simpler availability check)
         Boolean hasConflict = availabilityService.hasBookingConflict(
             booking.getRoomId(),
             booking.getCheckInDate(),
@@ -97,8 +86,8 @@ public class BookingServiceImpl implements BookingService {
                 "Booking conflict detected for room " + booking.getRoomId()
             );
         }
-        
-        // 3. Calculate price components
+
+        // Calculate price components
         Double basePrice = booking.getBasePrice();
         long numberOfNights = ChronoUnit.DAYS.between(booking.getCheckInDate(), booking.getCheckOutDate());
         if (numberOfNights <= 0) numberOfNights = 1;
@@ -195,16 +184,19 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
         bookingRepository.deleteById(id);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Boolean checkAvailability(Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
         return availabilityService.isRoomAvailableForDateRange(roomId, checkInDate, checkOutDate);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BookingPriceDTO calculateBookingPrice(Long roomId, Double basePrice, LocalDate checkInDate, LocalDate checkOutDate) {
         // Calculate number of nights
         long numberOfNights = ChronoUnit.DAYS.between(checkInDate, checkOutDate);
@@ -247,26 +239,31 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findByRoomId(Long roomId) {
         return bookingRepository.findByRoomId(roomId);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findByHotelId(Long hotelId) {
         return bookingRepository.findByHotelId(hotelId);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findConfirmedBookingsInDateRange(Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
         return bookingRepository.findConfirmedBookingsInDateRange(roomId, checkInDate, checkOutDate);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findByGuestEmail(String guestEmail) {
         return bookingRepository.findByGuestEmailIgnoreCase(guestEmail);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Booking> findByUserId(Long userId) {
         return bookingRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }

@@ -86,4 +86,12 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     // Check if host already reviewed this guest for a specific booking
     @Query("SELECT r FROM Review r WHERE r.userId = :hostUserId AND r.guestId = :guestId AND r.bookingId = :bookingId AND r.reviewType = 'GUEST' LIMIT 1")
     Optional<Review> findHostGuestReview(@Param("hostUserId") Long hostUserId, @Param("guestId") Long guestId, @Param("bookingId") Long bookingId);
+
+    // ── AnalyticsService batch query — avoids N+1 per-hotel loop ─────────────
+    @Query("SELECT r FROM Review r WHERE r.hotelId IN :hotelIds AND r.status = :status")
+    List<Review> findByHotelIdInAndStatus(@Param("hotelIds") List<Long> hotelIds, @Param("status") ReviewStatus status);
+
+    // Aggregate AVG for refreshHotelRating — avoids loading full entity list
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.hotelId = :hotelId AND r.status = 'APPROVED' AND r.reviewType = 'HOTEL'")
+    Double findAverageRatingByHotelId(@Param("hotelId") Long hotelId);
 }

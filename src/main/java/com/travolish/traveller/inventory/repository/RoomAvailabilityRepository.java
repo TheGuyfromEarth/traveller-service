@@ -57,11 +57,21 @@ public interface RoomAvailabilityRepository extends JpaRepository<RoomAvailabili
     );
 
     /**
-     * Find all rooms with available inventory on specific date
+     * Find all rooms with available inventory on specific date (all hotels)
      */
     @Query("SELECT ra FROM RoomAvailability ra WHERE ra.availabilityDate = :date " +
            "AND ra.availableRooms > 0 AND ra.status = com.travolish.traveller.inventory.model.RoomAvailability$AvailabilityStatus.AVAILABLE")
     List<RoomAvailability> findAvailableRoomsOnDate(@Param("date") LocalDate date);
+
+    /**
+     * Find available rooms for a specific hotel on a specific date — avoids full-table scan + in-memory filter.
+     */
+    @Query("SELECT ra FROM RoomAvailability ra WHERE ra.hotelId = :hotelId AND ra.availabilityDate = :date " +
+           "AND ra.availableRooms > 0 AND ra.status = com.travolish.traveller.inventory.model.RoomAvailability$AvailabilityStatus.AVAILABLE")
+    List<RoomAvailability> findAvailableRoomsOnDateAndHotelId(
+        @Param("date") LocalDate date,
+        @Param("hotelId") Long hotelId
+    );
 
     /**
      * Find all rooms available in date range (all dates must have availability)

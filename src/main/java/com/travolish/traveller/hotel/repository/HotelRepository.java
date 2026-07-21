@@ -15,6 +15,8 @@ public interface HotelRepository extends JpaRepository<Hotel, Long>, JpaSpecific
 
     List<Hotel> findByHostId(Long hostId);
 
+    List<Hotel> findByStatus(Hotel.HotelStatus status);
+
     @Query("SELECT h.id, COUNT(r) FROM Hotel h LEFT JOIN h.reviews r WHERE h.id IN :ids GROUP BY h.id")
     List<Object[]> countReviewsByHotelIds(@Param("ids") List<Long> ids);
 

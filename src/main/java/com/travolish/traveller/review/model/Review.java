@@ -10,7 +10,12 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 @Entity
-@Table(name = "reviews")
+@Table(name = "reviews", indexes = {
+    @Index(name = "idx_reviews_hotel_id",  columnList = "hotelId"),
+    @Index(name = "idx_reviews_user_id",   columnList = "userId"),
+    @Index(name = "idx_reviews_room_id",   columnList = "roomId"),
+    @Index(name = "idx_reviews_status",    columnList = "status"),
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

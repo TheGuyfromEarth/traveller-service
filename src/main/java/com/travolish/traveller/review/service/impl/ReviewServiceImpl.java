@@ -2,10 +2,13 @@ package com.travolish.traveller.review.service.impl;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.travolish.traveller.review.dto.ReviewDTO;
 import com.travolish.traveller.review.dto.ReviewModeratorDTO;
@@ -28,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ReviewServiceImpl implements ReviewService {
 
     private final ReviewRepository reviewRepository;
@@ -38,6 +42,7 @@ public class ReviewServiceImpl implements ReviewService {
     // ==================== Review Submission ====================
 
     @Override
+    @Transactional
     public ReviewDTO submitHotelReview(Long userId, Long hotelId, ReviewDTO reviewDTO) {
         // Check if user already reviewed this hotel
         if (reviewRepository.findUserHotelReview(userId, hotelId).isPresent()) {
@@ -59,6 +64,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public ReviewDTO submitGuestReview(Long hostUserId, Long guestId, Long bookingId, ReviewDTO reviewDTO) {
         if (reviewRepository.findHostGuestReview(hostUserId, guestId, bookingId).isPresent()) {
             throw new InvalidReviewException("You have already reviewed this guest for booking #" + bookingId + ".");
@@ -83,6 +89,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public ReviewDTO submitRoomReview(Long userId, Long hotelId, Long roomId, ReviewDTO reviewDTO) {
         // Check if user already reviewed this room
         if (reviewRepository.findUserRoomReview(userId, roomId).isPresent()) {
@@ -182,11 +189,14 @@ public class ReviewServiceImpl implements ReviewService {
                 .average()
                 .orElse(0.0);
 
-        long oneStar = reviews.stream().filter(r -> r.getRating() == 1).count();
-        long twoStars = reviews.stream().filter(r -> r.getRating() == 2).count();
-        long threeStars = reviews.stream().filter(r -> r.getRating() == 3).count();
-        long fourStars = reviews.stream().filter(r -> r.getRating() == 4).count();
-        long fiveStars = reviews.stream().filter(r -> r.getRating() == 5).count();
+        // Single pass instead of 5 separate filter().count() passes
+        Map<Integer, Long> byStar = reviews.stream()
+                .collect(Collectors.groupingBy(Review::getRating, Collectors.counting()));
+        long oneStar    = byStar.getOrDefault(1, 0L);
+        long twoStars   = byStar.getOrDefault(2, 0L);
+        long threeStars = byStar.getOrDefault(3, 0L);
+        long fourStars  = byStar.getOrDefault(4, 0L);
+        long fiveStars  = byStar.getOrDefault(5, 0L);
 
         double percentageRating = (fiveStars * 100.0) / totalReviews;
 
@@ -207,6 +217,7 @@ public class ReviewServiceImpl implements ReviewService {
     // ==================== Review Moderation ====================
 
     @Override
+    @Transactional
     public ReviewModeratorDTO approveReview(Long reviewId, Long moderatorId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -247,14 +258,10 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    /** Recalculates and persists hotel.rating and hotel.reviewCount from approved reviews. */
+    /** Recalculates and persists hotel.rating via a DB AVG aggregate — no entity list loaded. */
     private void refreshHotelRating(Long hotelId) {
-        List<Review> approved = reviewRepository.findAllHotelReviews(hotelId).stream()
-            .filter(r -> ReviewStatus.APPROVED == r.getStatus())
-            .toList();
-        if (approved.isEmpty()) return;
-
-        double avg = approved.stream().mapToInt(Review::getRating).average().orElse(0.0);
+        Double avg = reviewRepository.findAverageRatingByHotelId(hotelId);
+        if (avg == null) return;
         hotelRepository.findById(hotelId).ifPresent(hotel -> {
             hotel.setRating(Math.round(avg * 10.0) / 10.0);
             hotelRepository.save(hotel);
@@ -262,6 +269,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public ReviewModeratorDTO rejectReview(Long reviewId, String reason, Long moderatorId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -281,6 +289,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public ReviewModeratorDTO flagReview(Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -292,6 +301,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public ReviewModeratorDTO escalateReview(Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -317,6 +327,7 @@ public class ReviewServiceImpl implements ReviewService {
     // ==================== Review Management ====================
 
     @Override
+    @Transactional
     public ReviewDTO updateReview(Long reviewId, ReviewDTO reviewDTO) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -336,6 +347,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public void deleteReview(Long reviewId) {
         reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -346,6 +358,7 @@ public class ReviewServiceImpl implements ReviewService {
     // ==================== Helpful/Unhelpful Voting ====================
 
     @Override
+    @Transactional
     public ReviewDTO markHelpful(Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));
@@ -356,6 +369,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public ReviewDTO markUnhelpful(Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ReviewNotFoundException("Review not found with id: " + reviewId));

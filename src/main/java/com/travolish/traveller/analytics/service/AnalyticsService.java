@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class AnalyticsService {
     
     private final HostAnalyticsRepository hostAnalyticsRepository;
@@ -55,9 +55,10 @@ public class AnalyticsService {
         List<Long> hotelIds = hotelRepository.findByHostId(hostId)
             .stream().map(Hotel::getId).collect(Collectors.toList());
 
-        List<Booking> allBookings = hotelIds.stream()
-            .flatMap(hid -> bookingRepository.findByHotelId(hid).stream())
-            .collect(Collectors.toList());
+        // Batch-fetch all bookings in a single IN-query instead of N per-hotel queries
+        List<Booking> allBookings = hotelIds.isEmpty()
+            ? List.of()
+            : bookingRepository.findByHotelIdIn(hotelIds);
 
         overview.setTotalBookings(allBookings.size());
 
@@ -76,11 +77,10 @@ public class AnalyticsService {
                       && !b.getCheckInDate().isBefore(startOfMonth))
             .count());
 
-        // ── Live review stats ─────────────────────────────────────────────────
-        List<Review> approvedReviews = hotelIds.stream()
-            .flatMap(hid -> reviewRepository.findAllHotelReviews(hid).stream())
-            .filter(r -> Review.ReviewStatus.APPROVED == r.getStatus())
-            .collect(Collectors.toList());
+        // ── Live review stats — batch-fetch via IN-query ──────────────────────
+        List<Review> approvedReviews = hotelIds.isEmpty()
+            ? List.of()
+            : reviewRepository.findByHotelIdInAndStatus(hotelIds, Review.ReviewStatus.APPROVED);
 
         if (!approvedReviews.isEmpty()) {
             double avg = approvedReviews.stream().mapToInt(Review::getRating).average().orElse(0.0);
@@ -108,10 +108,10 @@ public class AnalyticsService {
             overview.setCancellationRate(latest.getCancellationRate());
         }
 
-        // ── Trend data ────────────────────────────────────────────────────────
-        overview.setBookingsTrend(generateBookingsTrend(hostId, thirtyDaysAgo, today));
-        overview.setRevenueTrend(generateRevenueTrend(hostId, thirtyDaysAgo, today));
-        overview.setOccupancyTrend(generateOccupancyTrend(hostId, thirtyDaysAgo, today));
+        // ── Trend data — pass hotelIds to avoid 3 extra hotelRepository lookups ─
+        overview.setBookingsTrend(generateBookingsTrend(hostId, hotelIds, thirtyDaysAgo, today));
+        overview.setRevenueTrend(generateRevenueTrend(hostId, hotelIds, thirtyDaysAgo, today));
+        overview.setOccupancyTrend(generateOccupancyTrend(hostId, hotelIds, thirtyDaysAgo, today));
 
         return overview;
     }
@@ -187,35 +187,38 @@ public class AnalyticsService {
     }
     
     /**
-     * Get monthly earnings breakdown
+     * Get monthly earnings breakdown — single DB query, then group in Java
      */
     public List<MonthlyEarningsSummaryDTO> getMonthlyEarningsBreakdown(Long hostId, Integer months) {
         log.debug("Fetching {}-month earnings breakdown for host: {}", months, hostId);
-        
-        List<MonthlyEarningsSummaryDTO> result = new ArrayList<>();
+
         LocalDate today = LocalDate.now();
-        
+        LocalDate rangeStart = YearMonth.from(today.minusMonths(months - 1)).atDay(1);
+        List<HostEarnings> allEarnings = hostEarningsRepository
+            .findByHostIdAndDateRange(hostId, rangeStart, today);
+
+        Map<YearMonth, List<HostEarnings>> byMonth = allEarnings.stream()
+            .filter(e -> e.getCheckInDate() != null)
+            .collect(Collectors.groupingBy(e -> YearMonth.from(e.getCheckInDate())));
+
+        List<MonthlyEarningsSummaryDTO> result = new ArrayList<>();
         for (int i = 0; i < months; i++) {
             YearMonth yearMonth = YearMonth.from(today.minusMonths(i));
-            LocalDate startDate = yearMonth.atDay(1);
-            LocalDate endDate = yearMonth.atEndOfMonth();
-            
-            List<HostEarnings> earnings = hostEarningsRepository
-                .findByHostIdAndDateRange(hostId, startDate, endDate);
-            
+            List<HostEarnings> earnings = byMonth.getOrDefault(yearMonth, List.of());
+
             MonthlyEarningsSummaryDTO summary = new MonthlyEarningsSummaryDTO();
             summary.setMonth(yearMonth.getMonthValue());
             summary.setYear(yearMonth.getYear());
             summary.setCompletedBookings(earnings.size());
-            
+
             BigDecimal totalEarnings = earnings.stream()
                 .map(HostEarnings::getNetEarnings)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             summary.setTotalEarnings(totalEarnings);
-            
+
             result.add(summary);
         }
-        
+
         return result;
     }
     
@@ -358,6 +361,7 @@ public class AnalyticsService {
     /**
      * Record a new earning
      */
+    @Transactional
     public HostEarningsDTO recordEarning(Long hostId, HostEarningsDTO earningDTO) {
         log.debug("Recording new earning for host: {}", hostId);
         
@@ -374,8 +378,9 @@ public class AnalyticsService {
     /**
      * Bookings trend: count of check-ins per day from live booking data.
      * Falls back to pre-computed HostAnalytics when available.
+     * hotelIds are pre-resolved by the caller to avoid a redundant DB lookup.
      */
-    private List<DailyMetricDTO> generateBookingsTrend(Long hostId, LocalDate start, LocalDate end) {
+    private List<DailyMetricDTO> generateBookingsTrend(Long hostId, List<Long> hotelIds, LocalDate start, LocalDate end) {
         List<HostAnalytics> cached = hostAnalyticsRepository.findByHostIdAndDateRange(hostId, start, end);
         if (!cached.isEmpty()) {
             return cached.stream()
@@ -384,13 +389,12 @@ public class AnalyticsService {
                 .collect(Collectors.toList());
         }
 
-        // Compute from live bookings
         Map<LocalDate, Long> daily = new TreeMap<>();
-        hotelRepository.findByHostId(hostId).stream()
-            .map(h -> h.getId())
-            .flatMap(hid -> bookingRepository.findByHotelId(hid).stream())
-            .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
-            .forEach(b -> daily.merge(b.getCheckInDate(), 1L, Long::sum));
+        if (!hotelIds.isEmpty()) {
+            bookingRepository.findByHotelIdIn(hotelIds).stream()
+                .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
+                .forEach(b -> daily.merge(b.getCheckInDate(), 1L, Long::sum));
+        }
 
         return daily.entrySet().stream()
             .map(e -> new DailyMetricDTO(e.getKey(), BigDecimal.valueOf(e.getValue()), "bookings"))
@@ -399,8 +403,9 @@ public class AnalyticsService {
 
     /**
      * Revenue trend: sum of totalPrice per check-in day from live confirmed bookings.
+     * hotelIds are pre-resolved by the caller to avoid a redundant DB lookup.
      */
-    private List<DailyMetricDTO> generateRevenueTrend(Long hostId, LocalDate start, LocalDate end) {
+    private List<DailyMetricDTO> generateRevenueTrend(Long hostId, List<Long> hotelIds, LocalDate start, LocalDate end) {
         // First try pre-computed earnings table
         List<HostEarnings> earnings = hostEarningsRepository.findByHostIdAndDateRange(hostId, start, end);
         if (!earnings.isEmpty()) {
@@ -416,15 +421,14 @@ public class AnalyticsService {
             }
         }
 
-        // Fall back to live confirmed bookings
         Map<LocalDate, BigDecimal> daily = new TreeMap<>();
-        hotelRepository.findByHostId(hostId).stream()
-            .map(h -> h.getId())
-            .flatMap(hid -> bookingRepository.findByHotelId(hid).stream())
-            .filter(b -> b.getStatus() != com.travolish.traveller.booking.model.Booking.BookingStatus.CANCELLED)
-            .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
-            .forEach(b -> daily.merge(b.getCheckInDate(),
-                BigDecimal.valueOf(b.getTotalPrice() != null ? b.getTotalPrice() : 0.0), BigDecimal::add));
+        if (!hotelIds.isEmpty()) {
+            bookingRepository.findByHotelIdIn(hotelIds).stream()
+                .filter(b -> b.getStatus() != Booking.BookingStatus.CANCELLED)
+                .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
+                .forEach(b -> daily.merge(b.getCheckInDate(),
+                    BigDecimal.valueOf(b.getTotalPrice() != null ? b.getTotalPrice() : 0.0), BigDecimal::add));
+        }
 
         return daily.entrySet().stream()
             .map(e -> new DailyMetricDTO(e.getKey(), e.getValue(), "revenue"))
@@ -433,8 +437,9 @@ public class AnalyticsService {
 
     /**
      * Occupancy trend: average occupancy % per day from availability records.
+     * hotelIds are pre-resolved by the caller to avoid a redundant DB lookup.
      */
-    private List<DailyMetricDTO> generateOccupancyTrend(Long hostId, LocalDate start, LocalDate end) {
+    private List<DailyMetricDTO> generateOccupancyTrend(Long hostId, List<Long> hotelIds, LocalDate start, LocalDate end) {
         List<HostAnalytics> cached = hostAnalyticsRepository.findByHostIdAndDateRange(hostId, start, end);
         if (!cached.isEmpty()) {
             return cached.stream()
@@ -443,18 +448,16 @@ public class AnalyticsService {
                 .collect(Collectors.toList());
         }
 
-        // Compute from bookings: bookings per day as a % of total hotel capacity
         Map<LocalDate, Long> bookingsPerDay = new TreeMap<>();
-        hotelRepository.findByHostId(hostId).stream()
-            .map(h -> h.getId())
-            .flatMap(hid -> bookingRepository.findByHotelId(hid).stream())
-            .filter(b -> b.getStatus() == com.travolish.traveller.booking.model.Booking.BookingStatus.CONFIRMED
-                      || b.getStatus() == com.travolish.traveller.booking.model.Booking.BookingStatus.COMPLETED)
-            .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
-            .forEach(b -> bookingsPerDay.merge(b.getCheckInDate(), 1L, Long::sum));
+        if (!hotelIds.isEmpty()) {
+            bookingRepository.findByHotelIdIn(hotelIds).stream()
+                .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED
+                          || b.getStatus() == Booking.BookingStatus.COMPLETED)
+                .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
+                .forEach(b -> bookingsPerDay.merge(b.getCheckInDate(), 1L, Long::sum));
+        }
 
-        long totalHotels = hotelRepository.findByHostId(hostId).size();
-        long denominator = Math.max(1, totalHotels);
+        long denominator = Math.max(1, hotelIds.size());
 
         return bookingsPerDay.entrySet().stream()
             .map(e -> new DailyMetricDTO(e.getKey(),

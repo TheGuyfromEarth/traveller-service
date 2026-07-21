@@ -116,4 +116,17 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     Long countNonCancelledBookingsForHotelInPeriod(@Param("hotelId") Long hotelId,
                                                     @Param("startDate") LocalDate startDate,
                                                     @Param("endDate") LocalDate endDate);
+
+    // ─── GuestReminderScheduler queries (targeted — avoids full-table scans) ──
+
+    /** All bookings with a given status whose check-in date equals the given date. */
+    List<Booking> findByStatusAndCheckInDate(Booking.BookingStatus status, LocalDate checkInDate);
+
+    /** All bookings whose status is in the given set and whose checkout date equals the given date. */
+    List<Booking> findByStatusInAndCheckOutDate(List<Booking.BookingStatus> statuses, LocalDate checkOutDate);
+
+    // ─── AnalyticsService batch query (replaces N+1 per-hotel loop) ───────────
+
+    /** All bookings for a set of hotel IDs — used to avoid per-hotel findByHotelId() N+1. */
+    List<Booking> findByHotelIdIn(List<Long> hotelIds);
 }

@@ -22,9 +22,14 @@ public class HotelController {
     }
 
     @GetMapping
-    public List<Hotel> list(@RequestParam(required = false) Long hostId) {
+    public List<Hotel> list(
+            @RequestParam(required = false) Long hostId,
+            @RequestParam(required = false) Hotel.HotelStatus status) {
         if (hostId != null) {
             return hotelService.findByHostId(hostId);
+        }
+        if (status != null) {
+            return hotelService.findByStatus(status);
         }
         return hotelService.findAll();
     }
@@ -49,6 +54,15 @@ public class HotelController {
     @PutMapping("/{id}")
     public ResponseEntity<Hotel> update(@PathVariable Long id, @Validated @RequestBody Hotel hotel) {
         return hotelService.update(id, hotel)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Hotel> updateStatus(
+            @PathVariable Long id,
+            @RequestParam Hotel.HotelStatus status) {
+        return hotelService.updateStatus(id, status)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

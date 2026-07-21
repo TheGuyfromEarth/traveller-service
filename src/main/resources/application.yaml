@@ -28,6 +28,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
   sql:
     init:
       mode: never
@@ -54,7 +58,7 @@ spring:
   task:
     scheduling:
       pool:
-        size: 2
+        size: 6
       thread-name-prefix: notification-scheduler-
       shutdown:
         await-termination: true
@@ -128,7 +132,7 @@ server:
   error:
     include-message: always
     include-exception: true
-    include-stacktrace: on_param
+    include-stacktrace: never
 
 logging:
   level:
