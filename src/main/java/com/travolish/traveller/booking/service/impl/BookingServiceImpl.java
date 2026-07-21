@@ -74,7 +74,17 @@ public class BookingServiceImpl implements BookingService {
             booking.setStatus(Booking.BookingStatus.PENDING);
         }
 
-        // Check for conflicts/overbooking (subsumes the simpler availability check)
+        // Check inventory availability first (room has open slots for the period)
+        boolean isAvailable = availabilityService.isRoomAvailableForDateRange(
+            booking.getRoomId(),
+            booking.getCheckInDate(),
+            booking.getCheckOutDate()
+        );
+        if (!isAvailable) {
+            throw InsufficientAvailabilityException.roomNotAvailable(booking.getRoomId());
+        }
+
+        // Then check for date-level conflicts with existing confirmed bookings
         Boolean hasConflict = availabilityService.hasBookingConflict(
             booking.getRoomId(),
             booking.getCheckInDate(),

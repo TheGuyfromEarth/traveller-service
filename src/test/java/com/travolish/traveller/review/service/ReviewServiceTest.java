@@ -30,12 +30,18 @@ import com.travolish.traveller.review.model.Review.ReviewStatus;
 import com.travolish.traveller.review.model.Review.ReviewType;
 import com.travolish.traveller.review.repository.ReviewRepository;
 import com.travolish.traveller.review.service.impl.ReviewServiceImpl;
+import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.notifications.service.NotificationService;
+import com.travolish.traveller.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReviewService Unit Tests — Review Submission & Moderation Flow")
 class ReviewServiceTest {
 
     @Mock private ReviewRepository reviewRepository;
+    @Mock private HotelRepository hotelRepository;
+    @Mock private NotificationService notificationService;
+    @Mock private UserRepository userRepository;
 
     @InjectMocks
     private ReviewServiceImpl reviewService;
