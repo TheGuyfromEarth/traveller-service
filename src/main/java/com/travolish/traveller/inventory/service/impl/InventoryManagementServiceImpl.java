@@ -442,6 +442,7 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
      * Helper method to determine demand level label
      */
     private String getDemandLevelLabel(Double occupancyPercentage) {
+        if (occupancyPercentage == null) return "LOW";
         if (occupancyPercentage < 30) return "LOW";
         if (occupancyPercentage < 60) return "MEDIUM";
         if (occupancyPercentage < 85) return "HIGH";

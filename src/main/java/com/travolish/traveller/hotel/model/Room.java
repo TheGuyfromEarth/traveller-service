@@ -58,13 +58,13 @@ public class Room {
     private Boolean privateBathroom = true;
 
     // §8 — Photos
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "room_photos", joinColumns = @JoinColumn(name = "room_id"))
     @Column(name = "photo_url")
     private List<String> photos = new ArrayList<>();
 
     // §23 — Room-level amenities
-    @ElementCollection(fetch = FetchType.LAZY)
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "room_amenities", joinColumns = @JoinColumn(name = "room_id"))
     @Column(name = "amenity")
     private List<String> amenities = new ArrayList<>();
