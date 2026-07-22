@@ -49,8 +49,14 @@ public class AdminDashboardController {
         long totalUsers = userRepository.count();
         long totalHotels = hotelRepository.count();
 
-        long pendingRequests = hotelChangeRequestRepository
+        long pendingChangeRequests = hotelChangeRequestRepository
                 .findByStatus(HotelChangeRequest.RequestStatus.PENDING).size();
+        long pendingListingApprovals = hotelRepository
+                .findAll().stream()
+                .filter(h -> com.travolish.traveller.hotel.model.Hotel.HotelStatus.PENDING_REVIEW.name()
+                        .equals(h.getStatus() != null ? h.getStatus().name() : ""))
+                .count();
+        long pendingRequests = pendingChangeRequests + pendingListingApprovals;
 
         long flaggedReviews = reviewRepository
                 .countByReviewStatus(Review.ReviewStatus.FLAGGED);

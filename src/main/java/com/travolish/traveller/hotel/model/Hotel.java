@@ -201,6 +201,9 @@ public class Hotel {
     @Column
     private HotelStatus status;
 
+    @Column(columnDefinition = "TEXT")
+    private String adminNote;
+
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     public enum HotelStatus {

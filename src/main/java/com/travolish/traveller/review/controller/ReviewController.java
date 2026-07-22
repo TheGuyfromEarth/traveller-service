@@ -234,6 +234,35 @@ public class ReviewController {
     }
 
     /**
+     * Redact review content (admin only) — overwrites title and content, then rejects.
+     */
+    @PostMapping("/{reviewId}/redact")
+    public ResponseEntity<ReviewModeratorDTO> redactReview(
+            @PathVariable Long reviewId,
+            @RequestHeader(value = "X-Moderator-Id", defaultValue = "1") Long moderatorId) {
+        reviewRepository.findById(reviewId).ifPresent(review -> {
+            review.setTitle("[Redacted]");
+            review.setContent("[This content has been removed by a platform administrator.]");
+            reviewRepository.save(review);
+        });
+        ReviewModeratorDTO redacted = reviewService.rejectReview(reviewId, "Content redacted by admin", moderatorId);
+        return ResponseEntity.ok(redacted);
+    }
+
+    /**
+     * Dismiss a flagged/pending review — no policy violation found, approve and close.
+     */
+    @PostMapping("/{reviewId}/dismiss")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void dismissReview(@PathVariable Long reviewId) {
+        reviewRepository.findById(reviewId).ifPresent(review -> {
+            review.setStatus(Review.ReviewStatus.APPROVED);
+            review.setModeratorNotes("Dismissed — no policy violation found");
+            reviewRepository.save(review);
+        });
+    }
+
+    /**
      * Get all pending reviews awaiting moderation (admin/moderator only)
      * 
      * @param pageable Pagination parameters
@@ -324,6 +353,23 @@ public class ReviewController {
         review.setHostResponseAt(OffsetDateTime.now());
         reviewRepository.save(review);
         return ResponseEntity.ok(reviewService.getReviewById(reviewId));
+    }
+
+    // ==================== Moderator Assignment ====================
+
+    /**
+     * Assign a moderator to a review without changing its status.
+     * moderatorId is the admin/moderator's user ID.
+     */
+    @PatchMapping("/{reviewId}/assign")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void assignModerator(
+            @PathVariable Long reviewId,
+            @RequestParam Long moderatorId) {
+        reviewRepository.findById(reviewId).ifPresent(review -> {
+            review.setModeratorId(moderatorId);
+            reviewRepository.save(review);
+        });
     }
 
     // ==================== Review Eligibility ====================

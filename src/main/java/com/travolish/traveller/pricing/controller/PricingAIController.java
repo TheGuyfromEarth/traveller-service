@@ -28,12 +28,17 @@ public class PricingAIController {
      * POST /api/pricing/suggestions/generate
      */
     @PostMapping("/generate")
-    public ResponseEntity<PricingSuggestionDTO> generateSuggestion(
+    public ResponseEntity<List<PricingSuggestionDTO>> generateSuggestion(
             @Valid @RequestBody PricingSuggestionRequest request) {
         try {
-            log.info("Generating pricing suggestion for room: {}", request.getRoomId());
-            PricingSuggestionDTO suggestion = pricingAIService.generateSuggestion(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(suggestion);
+            if (request.getRoomId() != null) {
+                log.info("Generating pricing suggestion for room: {}", request.getRoomId());
+                PricingSuggestionDTO suggestion = pricingAIService.generateSuggestion(request);
+                return ResponseEntity.status(HttpStatus.CREATED).body(List.of(suggestion));
+            }
+            log.info("Generating pricing suggestions for hotel: {}", request.getHotelId());
+            List<PricingSuggestionDTO> suggestions = pricingAIService.generateSuggestionsForHotel(request.getHotelId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(suggestions);
         } catch (Exception e) {
             log.error("Error generating pricing suggestion", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

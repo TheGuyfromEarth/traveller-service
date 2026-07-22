@@ -3,6 +3,9 @@ package com.travolish.traveller.user.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +65,10 @@ public class UserService {
         return userRepository.findAll().stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+
+    public Page<UserDTO> getUsersPage(Pageable pageable) {
+        return userRepository.findAll(pageable).map(this::convertToDTO);
     }
 
     public List<UserDTO> getUsersByFilter(String role, String status) {

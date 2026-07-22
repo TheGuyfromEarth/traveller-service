@@ -71,6 +71,22 @@ public class PricingAIServiceImpl implements PricingAIService {
     }
 
     @Override
+    public List<PricingSuggestionDTO> generateSuggestionsForHotel(Long hotelId) {
+        List<Room> rooms = roomRepository.findByHotelId(hotelId);
+        if (rooms.isEmpty()) return List.of();
+        LocalDate today = LocalDate.now();
+        return rooms.stream().map(room -> {
+            PricingSuggestionRequest req = PricingSuggestionRequest.builder()
+                    .hotelId(hotelId)
+                    .roomId(room.getId())
+                    .fromDate(today)
+                    .toDate(today.plusDays(30))
+                    .build();
+            return generateSuggestion(req);
+        }).collect(Collectors.toList());
+    }
+
+    @Override
     public List<PricingSuggestionDTO> getSuggestionsForHotel(Long hotelId) {
         return pricingSuggestionRepository.findByHotelId(hotelId)
                 .stream()
@@ -88,7 +104,7 @@ public class PricingAIServiceImpl implements PricingAIService {
 
     @Override
     public Page<PricingSuggestionDTO> getPendingSuggestionsForHotel(Long hotelId, Pageable pageable) {
-        return pricingSuggestionRepository.findByHotelIdAndStatus(hotelId, "PENDING", pageable)
+        return pricingSuggestionRepository.findByHotelIdAndStatus(hotelId, PricingSuggestion.SuggestionStatus.PENDING, pageable)
                 .map(this::mapToDTO);
     }
 

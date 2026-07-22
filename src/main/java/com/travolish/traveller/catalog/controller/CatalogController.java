@@ -55,6 +55,15 @@ public class CatalogController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PatchMapping("/{id}/order")
+    public ResponseEntity<CatalogItem> updateOrder(
+            @PathVariable Long id,
+            @RequestParam Integer displayOrder) {
+        return catalogService.updateOrder(id, displayOrder)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Boolean>> delete(@PathVariable Long id) {
         boolean deleted = catalogService.delete(id);

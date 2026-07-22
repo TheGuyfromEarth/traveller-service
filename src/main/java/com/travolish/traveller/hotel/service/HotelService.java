@@ -13,6 +13,7 @@ public interface HotelService {
     Hotel create(Hotel hotel);
     Optional<Hotel> update(Long id, Hotel hotel);
     Optional<Hotel> updateStatus(Long id, Hotel.HotelStatus status);
+    Optional<Hotel> updateStatus(Long id, Hotel.HotelStatus status, String adminNote);
     void delete(Long id);
     Optional<Hotel> updateImageUrl(Long id, String imageUrl);
     Optional<Hotel> updateVideoUrl(Long id, String videoUrl);

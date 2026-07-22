@@ -29,9 +29,18 @@ public class ReviewDTO {
     private Integer helpfulCount;
     private Integer unhelpfulCount;
     // Guest-review sub-ratings
+    // Hotel review category sub-ratings (1–5)
     private Integer cleanlinessRating;
+    private Integer accuracyRating;
+    private Integer communicationRating;
+    private Integer locationRating;
+    private Integer checkInRating;
+    private Integer valueRating;
+    // Guest-review sub-ratings
     private Integer theftRating;
     private Integer behaviorRating;
+    // Comma-separated highlight tags
+    private String tags;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

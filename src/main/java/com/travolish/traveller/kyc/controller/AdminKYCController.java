@@ -71,6 +71,19 @@ public class AdminKYCController {
     }
 
     @Transactional
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<HostKYCDTO> assignReviewer(
+            @PathVariable Long id,
+            @RequestParam Long reviewerId) {
+        return hostKYCRepository.findById(id).map(kyc -> {
+            kyc.setReviewerId(reviewerId);
+            HostKYC saved = hostKYCRepository.save(kyc);
+            log.info("KYC {} assigned to reviewer {}", id, reviewerId);
+            return ResponseEntity.ok(modelMapper.map(saved, HostKYCDTO.class));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @Transactional
     @PostMapping("/{id}/request-resubmit")
     public ResponseEntity<HostKYCDTO> requestResubmit(
             @PathVariable Long id,

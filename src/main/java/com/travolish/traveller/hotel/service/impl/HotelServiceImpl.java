@@ -185,4 +185,20 @@ public class HotelServiceImpl implements HotelService {
             return hotelRepository.save(existing);
         });
     }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
+    public Optional<Hotel> updateStatus(Long id, Hotel.HotelStatus status, String adminNote) {
+        return hotelRepository.findById(id).map(existing -> {
+            existing.setStatus(status);
+            if (adminNote != null && !adminNote.isBlank()) {
+                existing.setAdminNote(adminNote);
+            }
+            return hotelRepository.save(existing);
+        });
+    }
 }

@@ -67,12 +67,21 @@ public class Review {
 
     private OffsetDateTime reviewedAt;
 
-    // §22 — Sub-ratings (1–5 each)
+    // Hotel review category sub-ratings (1–5 each)
     @Min(1) @Max(5)
     private Integer cleanlinessRating;
 
     @Min(1) @Max(5)
+    private Integer accuracyRating;
+
+    @Min(1) @Max(5)
+    private Integer communicationRating;
+
+    @Min(1) @Max(5)
     private Integer locationRating;
+
+    @Min(1) @Max(5)
+    private Integer checkInRating;
 
     @Min(1) @Max(5)
     private Integer valueRating;
@@ -82,6 +91,10 @@ public class Review {
 
     @Min(1) @Max(5)
     private Integer comfortRating;
+
+    // Comma-separated highlight tags selected by the reviewer
+    @Column(length = 1000)
+    private String tags;
 
     // Guest-review-specific sub-ratings (host reviewing a guest)
     @Min(1) @Max(5)

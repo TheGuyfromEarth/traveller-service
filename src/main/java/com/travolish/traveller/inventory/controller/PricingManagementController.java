@@ -52,6 +52,32 @@ public class PricingManagementController {
     }
 
     /**
+     * Clone a pricing rule — creates a Draft copy with the same parameters
+     */
+    @PostMapping("/rules/{ruleId}/clone")
+    public ResponseEntity<PricingRuleDTO> clonePricingRule(@PathVariable Long ruleId) {
+        PricingRuleDTO original = seasonalPricingService.getPricingRule(ruleId);
+        PricingRuleDTO clone = PricingRuleDTO.builder()
+            .roomId(original.getRoomId())
+            .hotelId(original.getHotelId())
+            .startDate(original.getStartDate())
+            .endDate(original.getEndDate())
+            .pricingType(original.getPricingType())
+            .basePrice(original.getBasePrice())
+            .adjustedPrice(original.getAdjustedPrice())
+            .multiplier(original.getMultiplier())
+            .fixedDiscount(original.getFixedDiscount())
+            .ruleType(original.getRuleType())
+            .priority(original.getPriority())
+            .description("Copy of " + (original.getDescription() != null ? original.getDescription() : "Rule #" + ruleId))
+            .season(original.getSeason())
+            .isActive(false)
+            .build();
+        PricingRuleDTO created = seasonalPricingService.createPricingRule(clone);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    /**
      * Get pricing rule by ID
      */
     @GetMapping("/rules/{ruleId}")

@@ -1,7 +1,11 @@
 package com.travolish.traveller.booking.controller;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -12,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import com.travolish.traveller.booking.dto.BookingPriceDTO;
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.service.BookingService;
+import com.travolish.traveller.hotel.model.Hotel;
+import com.travolish.traveller.hotel.repository.HotelRepository;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -19,11 +25,45 @@ public class BookingController {
 
     private final BookingService bookingService;
     private final com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler;
+    private final HotelRepository hotelRepository;
 
     public BookingController(BookingService bookingService,
-                             com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler) {
+                             com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler,
+                             HotelRepository hotelRepository) {
         this.bookingService = bookingService;
         this.bookingStatusScheduler = bookingStatusScheduler;
+        this.hotelRepository = hotelRepository;
+    }
+
+    /**
+     * Admin-enriched booking list — includes hotelName resolved from HotelRepository.
+     * Used by the admin bookings table so admins see hotel names instead of raw IDs.
+     */
+    @GetMapping("/admin")
+    public List<Map<String, Object>> listAdmin() {
+        List<Booking> all = bookingService.findAll();
+        Set<Long> hotelIds = all.stream()
+                .map(Booking::getHotelId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<Long, String> nameMap = hotelRepository.findAllById(hotelIds).stream()
+                .collect(Collectors.toMap(Hotel::getId, Hotel::getName));
+
+        return all.stream().map(b -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id",          b.getId());
+            m.put("hotelId",     b.getHotelId());
+            m.put("hotelName",   b.getHotelId() != null ? nameMap.getOrDefault(b.getHotelId(), "Hotel #" + b.getHotelId()) : "—");
+            m.put("userId",      b.getUserId());
+            m.put("guestName",   b.getGuestName());
+            m.put("guestEmail",  b.getGuestEmail());
+            m.put("checkInDate", b.getCheckInDate());
+            m.put("checkOutDate",b.getCheckOutDate());
+            m.put("totalPrice",  b.getTotalPrice());
+            m.put("status",      b.getStatus() != null ? b.getStatus().name() : null);
+            m.put("notes",       b.getNotes());
+            return m;
+        }).collect(Collectors.toList());
     }
 
     /** On-demand status refresh — called by trips page on load so users never see stale PENDING for past stays. */
@@ -142,5 +182,20 @@ public class BookingController {
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
         boolean found = bookingService.cancelBooking(id);
         return found ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+    }
+
+    /**
+     * Confirm a PENDING booking (admin action).
+     * POST /api/bookings/1/confirm
+     */
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<Booking> confirmBooking(@PathVariable Long id) {
+        return bookingService.findById(id)
+                .map(b -> {
+                    b.setStatus(Booking.BookingStatus.CONFIRMED);
+                    return bookingService.update(id, b).orElse(b);
+                })
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

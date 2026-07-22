@@ -62,6 +62,14 @@ public class CatalogService {
     }
 
     @Transactional
+    public Optional<CatalogItem> updateOrder(Long id, Integer displayOrder) {
+        return repository.findById(id).map(item -> {
+            item.setDisplayOrder(displayOrder);
+            return repository.save(item);
+        });
+    }
+
+    @Transactional
     public boolean delete(Long id) {
         if (!repository.existsById(id)) return false;
         repository.deleteById(id);

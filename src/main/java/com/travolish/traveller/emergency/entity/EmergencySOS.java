@@ -22,10 +22,10 @@ public class EmergencySOS {
     @Column(nullable = false)
     private Long userId;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private Long bookingId;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private Long hotelId;
 
     @Enumerated(EnumType.STRING)

@@ -61,8 +61,23 @@ public class HotelController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<Hotel> updateStatus(
             @PathVariable Long id,
-            @RequestParam Hotel.HotelStatus status) {
-        return hotelService.updateStatus(id, status)
+            @RequestParam Hotel.HotelStatus status,
+            @RequestParam(required = false) String reason) {
+        return hotelService.updateStatus(id, status, reason)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Request additional documents from the host — returns the listing to DRAFT
+     * with an admin note explaining what is needed.
+     */
+    @PostMapping("/{id}/request-documents")
+    public ResponseEntity<Hotel> requestDocuments(
+            @PathVariable Long id,
+            @RequestParam(required = false) String reason) {
+        String note = "Documents requested by admin" + (reason != null && !reason.isBlank() ? ": " + reason : ".");
+        return hotelService.updateStatus(id, Hotel.HotelStatus.DRAFT, note)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

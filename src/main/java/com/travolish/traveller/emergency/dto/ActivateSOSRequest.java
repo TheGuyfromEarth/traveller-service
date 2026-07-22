@@ -14,10 +14,8 @@ public class ActivateSOSRequest {
     @NotNull(message = "User ID required")
     private Long userId;
     
-    @NotNull(message = "Booking ID required")
     private Long bookingId;
-    
-    @NotNull(message = "Hotel ID required")
+
     private Long hotelId;
     
     @NotNull(message = "SOS type required")

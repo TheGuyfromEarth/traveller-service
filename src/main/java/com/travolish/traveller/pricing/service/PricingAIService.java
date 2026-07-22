@@ -8,6 +8,8 @@ import java.util.List;
 
 public interface PricingAIService {
     PricingSuggestionDTO generateSuggestion(PricingSuggestionRequest request);
+
+    List<PricingSuggestionDTO> generateSuggestionsForHotel(Long hotelId);
     
     List<PricingSuggestionDTO> getSuggestionsForHotel(Long hotelId);
     

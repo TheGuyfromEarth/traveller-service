@@ -94,7 +94,9 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
-            // helper.addAttachment("filename", new File(attachmentPath));
+            if (attachmentPath != null && !attachmentPath.isBlank()) {
+                helper.addAttachment(new java.io.File(attachmentPath).getName(), new java.io.File(attachmentPath));
+            }
             javaMailSender.get().send(message);
             log.info("Email with attachment sent successfully to: {}", to);
             persistLog(to, subject, htmlContent, "ATTACHMENT", "SENT", null);

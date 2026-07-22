@@ -18,7 +18,7 @@ public interface PricingSuggestionRepository extends JpaRepository<PricingSugges
     
     List<PricingSuggestion> findByStatus(String status);
     
-    Page<PricingSuggestion> findByHotelIdAndStatus(Long hotelId, String status, Pageable pageable);
+    Page<PricingSuggestion> findByHotelIdAndStatus(Long hotelId, PricingSuggestion.SuggestionStatus status, Pageable pageable);
     
     Page<PricingSuggestion> findByRoomId(Long roomId, Pageable pageable);
     

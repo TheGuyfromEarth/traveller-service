@@ -106,6 +106,9 @@ public class HostKYC {
     
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "reviewer_id")
+    private Long reviewerId;
     
     // Risk Assessment
     @Column(name = "risk_score")
