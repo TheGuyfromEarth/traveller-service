@@ -83,7 +83,6 @@ jobs:
             --port=8080 \
             --allow-unauthenticated \
             --cpu-boost \
-            --set-env-vars="DB_URL=${{ secrets.DB_URL }},DB_USER=${{ secrets.DB_USER }},DB_PASSWORD=${{ secrets.DB_PASSWORD }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY }},SUPABASE_BUCKET_NAME=${{ secrets.SUPABASE_BUCKET_NAME }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},GCP_SA_KEY_B64=${GCP_SA_KEY_B64},SMS_ENABLED=true,SMS_PROVIDER=twilio,TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }},TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }},TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}"
 
       - name: Show Cloud Run service URL
         run: |
