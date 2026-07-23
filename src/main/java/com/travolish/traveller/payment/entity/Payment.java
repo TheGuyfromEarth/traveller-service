@@ -10,11 +10,11 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "payments", indexes = {
-    @Index(name = "idx_user_id", columnList = "user_id"),
-    @Index(name = "idx_booking_id", columnList = "booking_id"),
+    @Index(name = "idx_payment_user_id", columnList = "user_id"),
+    @Index(name = "idx_payment_booking_id", columnList = "booking_id"),
     @Index(name = "idx_payment_status", columnList = "payment_status"),
     @Index(name = "idx_transaction_id", columnList = "transaction_id"),
-    @Index(name = "idx_created_date", columnList = "created_at"),
+    @Index(name = "idx_payment_created_date", columnList = "created_at"),
     @Index(name = "idx_razorpay_order_id", columnList = "razorpay_order_id")
 })
 @Data

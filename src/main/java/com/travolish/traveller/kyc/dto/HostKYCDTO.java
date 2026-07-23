@@ -43,11 +43,21 @@ public class HostKYCDTO {
     private String verificationLevel;
     private LocalDateTime verificationDate;
     private LocalDate expiryDate;
-    
+
+    // Rejection / Feedback
+    private String rejectionReason;
+    private LocalDateTime rejectionDate;
+    private String notes;
+    private Long reviewerId;
+
     // Risk Assessment
     private Integer riskScore;
     private String riskLevel;
-    
+
+    // Timestamps
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
     // Related data
     private List<HostDocumentDTO> documents;
     private List<HostBankAccountDTO> bankAccounts;

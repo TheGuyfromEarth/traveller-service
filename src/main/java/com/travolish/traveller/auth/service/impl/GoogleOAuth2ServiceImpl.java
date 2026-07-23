@@ -42,6 +42,9 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
     @Value("${google.oauth2.verify-signature:true}")
     private boolean verifySignature;
 
+    @Value("${app.admin-emails:}")
+    private String adminEmailsCsv;
+
     private static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
     public GoogleOAuth2Request.GoogleUserData getUserInfoFromIdToken(String idToken) {
         log.info("Extracting user info from Google ID token");
@@ -112,6 +115,17 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                 user.setProviderId(userInfo.getSub());
                 isNewUser = true;
                 log.info("Created new Google user: {}", userInfo.getEmail());
+            }
+
+            // Promote to ADMIN if email is in the dev whitelist (app.admin-emails)
+            if (adminEmailsCsv != null && !adminEmailsCsv.isBlank()) {
+                boolean isAdminEmail = java.util.Arrays.stream(adminEmailsCsv.split(","))
+                        .map(String::trim)
+                        .anyMatch(e -> e.equalsIgnoreCase(userInfo.getEmail()));
+                if (isAdminEmail && !"ADMIN".equalsIgnoreCase(user.getRole())) {
+                    user.setRole("ADMIN");
+                    log.info("Promoted {} to ADMIN via admin-emails whitelist", userInfo.getEmail());
+                }
             }
 
             // Save user

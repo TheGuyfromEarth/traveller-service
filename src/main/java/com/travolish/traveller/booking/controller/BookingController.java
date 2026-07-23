@@ -40,8 +40,17 @@ public class BookingController {
      * Used by the admin bookings table so admins see hotel names instead of raw IDs.
      */
     @GetMapping("/admin")
-    public List<Map<String, Object>> listAdmin() {
+    public List<Map<String, Object>> listAdmin(
+            @RequestParam(required = false) String search) {
         List<Booking> all = bookingService.findAll();
+        if (search != null && !search.isBlank()) {
+            String q = search.trim().toLowerCase();
+            all = all.stream()
+                    .filter(b -> (b.getGuestName() != null && b.getGuestName().toLowerCase().contains(q))
+                            || (b.getGuestEmail() != null && b.getGuestEmail().toLowerCase().contains(q))
+                            || (b.getId() != null && b.getId().toString().contains(q)))
+                    .collect(Collectors.toList());
+        }
         Set<Long> hotelIds = all.stream()
                 .map(Booking::getHotelId)
                 .filter(id -> id != null)

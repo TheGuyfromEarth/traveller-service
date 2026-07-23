@@ -154,7 +154,7 @@ public class AdminDashboardController {
             double revenue = dayBookings.stream()
                     .mapToDouble(b -> b.getTotalPrice() != null ? b.getTotalPrice() : 0)
                     .sum();
-            String label = DAY_LABELS[date.getDayOfWeek().getValue() % 7];
+            String label = DAY_LABELS[date.getDayOfWeek().getValue() - 1];
             trend.add(AdminDashboardStatsDTO.DayTrendDTO.builder()
                     .label(label)
                     .bookings(count)

@@ -15,7 +15,7 @@ import java.util.List;
 @Table(name = "conversations", indexes = {
     @Index(name = "idx_user1", columnList = "user_id_1"),
     @Index(name = "idx_user2", columnList = "user_id_2"),
-    @Index(name = "idx_created_at", columnList = "created_at")
+    @Index(name = "idx_conv_created_at", columnList = "created_at")
 })
 @Data
 @NoArgsConstructor

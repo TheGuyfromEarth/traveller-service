@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "payment_methods", indexes = {
-    @Index(name = "idx_user_id", columnList = "user_id"),
+    @Index(name = "idx_pay_method_user_id", columnList = "user_id"),
     @Index(name = "idx_razorpay_token_id", columnList = "razorpay_token_id")
 })
 @Data

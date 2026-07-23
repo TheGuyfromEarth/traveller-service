@@ -30,17 +30,62 @@ public class AdminKYCController {
                 ? hostKYCRepository.findByKYCStatus(status)
                 : hostKYCRepository.findAll();
         List<HostKYCDTO> dtos = records.stream()
-                .map(k -> modelMapper.map(k, HostKYCDTO.class))
+                .map(this::toListDto)
                 .toList();
         return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<HostKYCDTO> getKYCById(@PathVariable Long id) {
+        return hostKYCRepository.findById(id)
+                .map(k -> modelMapper.map(k, HostKYCDTO.class))
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/pending")
     public ResponseEntity<List<HostKYCDTO>> getPendingKYC() {
         List<HostKYCDTO> dtos = hostKYCRepository.findPendingVerifications().stream()
-                .map(k -> modelMapper.map(k, HostKYCDTO.class))
+                .map(this::toListDto)
                 .toList();
         return ResponseEntity.ok(dtos);
+    }
+
+    private HostKYCDTO toListDto(HostKYC k) {
+        HostKYCDTO dto = new HostKYCDTO();
+        dto.setId(k.getId());
+        dto.setHostId(k.getHostId());
+        dto.setFirstName(k.getFirstName());
+        dto.setLastName(k.getLastName());
+        dto.setDateOfBirth(k.getDateOfBirth());
+        dto.setPhoneNumber(k.getPhoneNumber());
+        dto.setNationality(k.getNationality());
+        dto.setNationalIdNumber(k.getNationalIdNumber());
+        dto.setAddressLine1(k.getAddressLine1());
+        dto.setAddressLine2(k.getAddressLine2());
+        dto.setCity(k.getCity());
+        dto.setStateProvince(k.getStateProvince());
+        dto.setPostalCode(k.getPostalCode());
+        dto.setCountry(k.getCountry());
+        dto.setBusinessName(k.getBusinessName());
+        dto.setBusinessType(k.getBusinessType());
+        dto.setBusinessRegistrationNumber(k.getBusinessRegistrationNumber());
+        dto.setTaxId(k.getTaxId());
+        dto.setBusinessLicenseNumber(k.getBusinessLicenseNumber());
+        dto.setKycStatus(k.getKycStatus());
+        dto.setVerificationLevel(k.getVerificationLevel());
+        dto.setVerificationDate(k.getVerificationDate());
+        dto.setExpiryDate(k.getExpiryDate());
+        dto.setRejectionReason(k.getRejectionReason());
+        dto.setRejectionDate(k.getRejectionDate());
+        dto.setNotes(k.getNotes());
+        dto.setReviewerId(k.getReviewerId());
+        dto.setRiskScore(k.getRiskScore());
+        dto.setRiskLevel(k.getRiskLevel());
+        dto.setCreatedAt(k.getCreatedAt());
+        dto.setUpdatedAt(k.getUpdatedAt());
+        // documents and bankAccounts deliberately omitted — not needed for list view
+        return dto;
     }
 
     @Transactional

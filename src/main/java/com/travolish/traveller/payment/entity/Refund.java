@@ -10,8 +10,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "refunds", indexes = {
-    @Index(name = "idx_payment_id", columnList = "payment_id"),
-    @Index(name = "idx_user_id", columnList = "user_id"),
+    @Index(name = "idx_refund_payment_id", columnList = "payment_id"),
+    @Index(name = "idx_refund_user_id", columnList = "user_id"),
     @Index(name = "idx_refund_status", columnList = "refund_status"),
     @Index(name = "idx_razorpay_refund_id", columnList = "razorpay_refund_id")
 })

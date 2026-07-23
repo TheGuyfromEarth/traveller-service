@@ -24,14 +24,25 @@ public class HotelController {
     @GetMapping
     public List<Hotel> list(
             @RequestParam(required = false) Long hostId,
-            @RequestParam(required = false) Hotel.HotelStatus status) {
+            @RequestParam(required = false) Hotel.HotelStatus status,
+            @RequestParam(required = false) String search) {
+        List<Hotel> results;
         if (hostId != null) {
-            return hotelService.findByHostId(hostId);
+            results = hotelService.findByHostId(hostId);
+        } else if (status != null) {
+            results = hotelService.findByStatus(status);
+        } else {
+            results = hotelService.findAll();
         }
-        if (status != null) {
-            return hotelService.findByStatus(status);
+        if (search != null && !search.isBlank()) {
+            String q = search.trim().toLowerCase();
+            results = results.stream()
+                    .filter(h -> (h.getName() != null && h.getName().toLowerCase().contains(q))
+                            || (h.getCity() != null && h.getCity().toLowerCase().contains(q))
+                            || (h.getCountry() != null && h.getCountry().toLowerCase().contains(q)))
+                    .collect(java.util.stream.Collectors.toList());
         }
-        return hotelService.findAll();
+        return results;
     }
 
     @GetMapping("/{id}")

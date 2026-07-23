@@ -14,8 +14,8 @@ import java.util.List;
 
 @Entity
 @Table(name = "host_kyc", indexes = {
-    @Index(name = "idx_host_id", columnList = "host_id"),
-    @Index(name = "idx_status", columnList = "kyc_status"),
+    @Index(name = "idx_kyc_host_id", columnList = "host_id"),
+    @Index(name = "idx_kyc_status", columnList = "kyc_status"),
     @Index(name = "idx_verification_level", columnList = "verification_level")
 })
 @Data

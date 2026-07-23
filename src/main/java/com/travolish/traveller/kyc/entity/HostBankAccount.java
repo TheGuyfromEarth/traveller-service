@@ -11,9 +11,9 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "host_bank_accounts", indexes = {
-    @Index(name = "idx_host_kyc_id", columnList = "host_kyc_id"),
-    @Index(name = "idx_status", columnList = "verification_status"),
-    @Index(name = "idx_is_primary", columnList = "is_primary")
+    @Index(name = "idx_bank_kyc_id", columnList = "host_kyc_id"),
+    @Index(name = "idx_bank_status", columnList = "verification_status"),
+    @Index(name = "idx_bank_is_primary", columnList = "is_primary")
 })
 @Data
 @NoArgsConstructor

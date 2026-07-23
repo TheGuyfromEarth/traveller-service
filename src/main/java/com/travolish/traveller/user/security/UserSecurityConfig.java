@@ -61,7 +61,8 @@ public class UserSecurityConfig {
             CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**").disable())
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, e) -> {
@@ -74,6 +75,8 @@ public class UserSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Pre-flight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // H2 console (local dev only)
+                        .requestMatchers("/h2-console/**").permitAll()
                         // Auth + public read endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
@@ -105,6 +108,11 @@ public class UserSecurityConfig {
                         // Analytics: host/admin only; inventory: any authenticated user
                         .requestMatchers("/api/analytics/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/inventory/**").authenticated()
+                        // User management mutations — admin only
+                        .requestMatchers(HttpMethod.PATCH, "/api/users/*/status").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/users/*/role").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/users/*/notify").hasRole("ADMIN")
                         // Authenticated users (any role)
                         .requestMatchers("/api/users/me").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
@@ -113,6 +121,13 @@ public class UserSecurityConfig {
                         .requestMatchers("/api/wishlists/**").authenticated()
                         .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
+                        // Review moderation actions — admin only
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/*/approve").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/*/reject").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/*/redact").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/*/escalate").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/*/dismiss").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/reviews/*/assign").hasRole("ADMIN")
                         .requestMatchers("/api/reviews/**").authenticated()
                         // Everything else public (search, property detail, etc.)
                         .anyRequest().permitAll()

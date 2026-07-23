@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "host_analytics", indexes = {
-    @Index(name = "idx_host_id", columnList = "host_id"),
+    @Index(name = "idx_analytics_host_id", columnList = "host_id"),
     @Index(name = "idx_date", columnList = "analytics_date"),
     @Index(name = "idx_period", columnList = "period_start_date, period_end_date")
 })

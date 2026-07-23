@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "message_attachments", indexes = {
     @Index(name = "idx_message_id", columnList = "message_id"),
-    @Index(name = "idx_created_at", columnList = "created_at")
+    @Index(name = "idx_attachment_created_at", columnList = "created_at")
 })
 @Data
 @NoArgsConstructor
