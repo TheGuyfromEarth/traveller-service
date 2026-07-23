@@ -7,6 +7,7 @@ import java.util.List;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.travolish.traveller.review.model.Review;
@@ -61,6 +62,7 @@ public class Hotel {
     private PropertyCategory category;
 
     // Step 2 — multi-select sub-types (e.g. LUXURY_HOTEL + SPA_HOTEL)
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_sub_types", joinColumns = @JoinColumn(name = "hotel_id"))
     @Enumerated(EnumType.STRING)
@@ -68,6 +70,7 @@ public class Hotel {
     private List<PropertySubType> subTypes = new ArrayList<>();
 
     // Target guest segments (multi-select)
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_target_guests", joinColumns = @JoinColumn(name = "hotel_id"))
     @Enumerated(EnumType.STRING)
@@ -91,6 +94,7 @@ public class Hotel {
 
     private String brand;
 
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_languages", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "language")
@@ -127,11 +131,13 @@ public class Hotel {
 
     private String coverPhotoTitle;
 
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_gallery_images", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "image_url")
     private List<String> galleryImages = new ArrayList<>();
 
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_drone_photos", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "photo_url")
@@ -167,12 +173,14 @@ public class Hotel {
     private String checkOutTime;
 
     // §11 — Amenities
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_amenities", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "amenity")
     private List<String> amenities = new ArrayList<>();
 
     // §14 — Meal options
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_meal_options", joinColumns = @JoinColumn(name = "hotel_id"))
     @Enumerated(EnumType.STRING)
@@ -180,18 +188,21 @@ public class Hotel {
     private List<MealOption> mealOptions = new ArrayList<>();
 
     // §15 — Transportation
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_transportation", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "option")
     private List<String> transportationOptions = new ArrayList<>();
 
     // §16 — Guest services
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_guest_services", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "service")
     private List<String> guestServices = new ArrayList<>();
 
     // §17 — Sustainability
+    @BatchSize(size = 50)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "hotel_sustainability", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "feature")

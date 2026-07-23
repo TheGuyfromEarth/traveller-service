@@ -117,7 +117,16 @@ public class HotelServiceImpl implements HotelService {
             if (hotel.getMinimumStay() != null) existing.setMinimumStay(hotel.getMinimumStay());
             if (hotel.getCheckInTime() != null) existing.setCheckInTime(hotel.getCheckInTime());
             if (hotel.getCheckOutTime() != null) existing.setCheckOutTime(hotel.getCheckOutTime());
-            if (hotel.getStatus() != null) existing.setStatus(hotel.getStatus());
+            if (hotel.getStatus() != null) {
+                // Guard: DRAFT listings cannot jump directly to LIVE — they must go through
+                // PENDING_REVIEW via the submit-for-review endpoint first.
+                if (existing.getStatus() == Hotel.HotelStatus.DRAFT
+                        && hotel.getStatus() == Hotel.HotelStatus.LIVE) {
+                    throw new IllegalStateException(
+                            "A DRAFT listing must be submitted for review before it can go LIVE.");
+                }
+                existing.setStatus(hotel.getStatus());
+            }
             if (hotel.getImageUrl() != null) existing.setImageUrl(hotel.getImageUrl());
             if (hotel.getVideoUrl() != null) existing.setVideoUrl(hotel.getVideoUrl());
             return hotelRepository.save(existing);
@@ -198,7 +207,83 @@ public class HotelServiceImpl implements HotelService {
             if (adminNote != null && !adminNote.isBlank()) {
                 existing.setAdminNote(adminNote);
             }
-            return hotelRepository.save(existing);
+            Hotel saved = hotelRepository.save(existing);
+            sendStatusChangeNotification(saved, status, adminNote);
+            return saved;
+        });
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "hotels", key = "#id"),
+        @CacheEvict(value = "hotel-search", allEntries = true)
+    })
+    public Optional<Hotel> submitForReview(Long id) {
+        return hotelRepository.findById(id).map(existing -> {
+            if (existing.getStatus() != Hotel.HotelStatus.DRAFT) {
+                throw new IllegalStateException(
+                        "Only DRAFT listings can be submitted for review. Current status: " + existing.getStatus());
+            }
+            existing.setStatus(Hotel.HotelStatus.PENDING_REVIEW);
+            Hotel saved = hotelRepository.save(existing);
+            sendStatusChangeNotification(saved, Hotel.HotelStatus.PENDING_REVIEW, null);
+            return saved;
+        });
+    }
+
+    private void sendStatusChangeNotification(Hotel hotel, Hotel.HotelStatus newStatus, String adminNote) {
+        if (hotel.getHostId() == null) return;
+        userRepository.findById(hotel.getHostId()).ifPresent(host -> {
+            if (host.getEmail() == null) return;
+            String firstName = host.getFirstName() != null ? host.getFirstName() : "Host";
+            String subject;
+            String message;
+            switch (newStatus) {
+                case LIVE -> {
+                    subject = "Your listing is now live — " + hotel.getName();
+                    message = "Hi " + firstName + ",\n\n"
+                            + "Great news! Your property \"" + hotel.getName() + "\" has been approved "
+                            + "and is now live on Travolish.\n\n"
+                            + "Travellers can now find and book your property.\n\n"
+                            + "— The Travolish Team";
+                }
+                case DRAFT -> {
+                    subject = "Listing update required — " + hotel.getName();
+                    String reason = (adminNote != null && !adminNote.isBlank())
+                            ? adminNote
+                            : "Please review your listing and make the necessary updates.";
+                    message = "Hi " + firstName + ",\n\n"
+                            + "Your property \"" + hotel.getName() + "\" has been returned to Draft "
+                            + "and requires your attention.\n\n"
+                            + "Reason: " + reason + "\n\n"
+                            + "Please log in to the Host Portal, review the feedback, update your listing, "
+                            + "and resubmit for review.\n\n"
+                            + "— The Travolish Team";
+                }
+                case PENDING_REVIEW -> {
+                    subject = "Listing submitted for review — " + hotel.getName();
+                    message = "Hi " + firstName + ",\n\n"
+                            + "Your property \"" + hotel.getName() + "\" has been submitted for review.\n\n"
+                            + "Our team will review your listing and notify you once a decision is made.\n\n"
+                            + "— The Travolish Team";
+                }
+                default -> { return; }
+            }
+            try {
+                SendNotificationRequest req = new SendNotificationRequest();
+                req.setType(NotificationType.BOOKING_CONFIRMATION);
+                req.setChannel(NotificationChannel.EMAIL);
+                req.setUserId(host.getId());
+                req.setRecipientEmail(host.getEmail());
+                req.setHotelId(hotel.getId());
+                req.setSendImmediately(true);
+                req.setSubject(subject);
+                req.setMessage(message);
+                notificationService.sendNotificationAsync(req);
+            } catch (Exception e) {
+                log.warn("Failed to send status-change notification for hotel {}: {}", hotel.getId(), e.getMessage());
+            }
         });
     }
 }

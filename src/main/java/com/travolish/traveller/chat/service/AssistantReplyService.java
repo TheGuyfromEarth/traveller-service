@@ -4,12 +4,14 @@ import com.travolish.traveller.chat.entity.Conversation;
 import com.travolish.traveller.chat.entity.Message;
 import com.travolish.traveller.chat.repository.ConversationRepository;
 import com.travolish.traveller.chat.repository.MessageRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -51,6 +53,14 @@ public class AssistantReplyService {
         this.conversationRepository = conversationRepository;
     }
 
+    @PostConstruct
+    void validateApiKey() {
+        if (geminiApiKey == null || geminiApiKey.isBlank()) {
+            log.warn("GEMINI_API_KEY is not set — AI chat will use fallback responses only. " +
+                     "Set the environment variable GEMINI_API_KEY to enable live AI replies.");
+        }
+    }
+
     /**
      * Generates an AI reply for the given user message and persists it to the conversation.
      * Called asynchronously — the parent transaction has already committed by the time this runs.
@@ -83,7 +93,8 @@ public class AssistantReplyService {
             conversationRepository.save(conversation);
 
         } catch (Exception e) {
-            log.warn("AI assistant reply failed for conversation {}: {}", conversationId, e.getMessage());
+            log.warn("AI assistant reply failed for conversation {} ({}): {}",
+                     conversationId, e.getClass().getSimpleName(), e.getMessage());
         }
     }
 
@@ -120,8 +131,15 @@ public class AssistantReplyService {
                     }
                 }
             }
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 429) {
+                log.warn("Gemini rate limit hit (429) — using fallback response. " +
+                         "Free tier allows 15 RPM; consider upgrading if this recurs.");
+            } else {
+                log.warn("Gemini API HTTP {} error: {}", e.getStatusCode().value(), e.getMessage());
+            }
         } catch (Exception e) {
-            log.warn("Gemini API error: {}", e.getMessage());
+            log.warn("Gemini API error ({}): {}", e.getClass().getSimpleName(), e.getMessage());
         }
         return fallback(userText);
     }

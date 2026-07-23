@@ -3,6 +3,7 @@ package com.travolish.traveller.admin.controller;
 import com.travolish.traveller.admin.dto.AdminDashboardStatsDTO;
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.repository.BookingRepository;
+import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.model.HotelChangeRequest;
 import com.travolish.traveller.hotel.repository.HotelChangeRequestRepository;
 import com.travolish.traveller.hotel.repository.HotelRepository;
@@ -12,6 +13,7 @@ import com.travolish.traveller.review.repository.ReviewRepository;
 import com.travolish.traveller.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +26,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,27 +52,20 @@ public class AdminDashboardController {
         long totalUsers = userRepository.count();
         long totalHotels = hotelRepository.count();
 
-        long pendingChangeRequests = hotelChangeRequestRepository
-                .findByStatus(HotelChangeRequest.RequestStatus.PENDING).size();
-        long pendingListingApprovals = hotelRepository
-                .findAll().stream()
-                .filter(h -> com.travolish.traveller.hotel.model.Hotel.HotelStatus.PENDING_REVIEW.name()
-                        .equals(h.getStatus() != null ? h.getStatus().name() : ""))
-                .count();
+        long pendingChangeRequests = hotelChangeRequestRepository.countByStatus(HotelChangeRequest.RequestStatus.PENDING);
+        long pendingListingApprovals = hotelRepository.countByStatus(Hotel.HotelStatus.PENDING_REVIEW);
         long pendingRequests = pendingChangeRequests + pendingListingApprovals;
 
-        long flaggedReviews = reviewRepository
-                .countByReviewStatus(Review.ReviewStatus.FLAGGED);
+        long flaggedReviews = reviewRepository.countByReviewStatus(Review.ReviewStatus.FLAGGED);
+        long pendingKYC = hostKYCRepository.countByKycStatus("PENDING");
 
-        long pendingKYC = hostKYCRepository.findPendingVerifications().size();
+        long totalBookings = bookingRepository.count();
+        long confirmedBookings = bookingRepository.countByStatus(Booking.BookingStatus.CONFIRMED);
 
-        List<Booking> allBookings = bookingRepository.findAll();
-        long totalBookings = allBookings.size();
-        long confirmedBookings = allBookings.stream()
-                .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED)
-                .count();
-
-        List<AdminDashboardStatsDTO.DayTrendDTO> trend = buildWeekTrend(allBookings);
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = today.minusDays(6);
+        List<Object[]> trendRaw = bookingRepository.countAndRevenueByCheckInDateBetween(weekStart, today);
+        List<AdminDashboardStatsDTO.DayTrendDTO> trend = buildWeekTrend(trendRaw, today);
 
         AdminDashboardStatsDTO stats = AdminDashboardStatsDTO.builder()
                 .totalUsers(totalUsers)
@@ -90,29 +86,27 @@ public class AdminDashboardController {
         record Entry(String title, String meta, Instant at) {}
         List<Entry> entries = new ArrayList<>();
 
-        List<HotelChangeRequest> processed = new ArrayList<>();
-        processed.addAll(hotelChangeRequestRepository.findByStatus(HotelChangeRequest.RequestStatus.APPROVED));
-        processed.addAll(hotelChangeRequestRepository.findByStatus(HotelChangeRequest.RequestStatus.REJECTED));
-        for (HotelChangeRequest req : processed) {
-            if (req.getProcessedAt() == null) continue;
+        hotelChangeRequestRepository.findRecentProcessed(
+                List.of(HotelChangeRequest.RequestStatus.APPROVED, HotelChangeRequest.RequestStatus.REJECTED),
+                PageRequest.of(0, 8)
+        ).forEach(req -> {
             String title = req.getStatus() == HotelChangeRequest.RequestStatus.APPROVED
                     ? "Listing approved" : "Listing rejected";
             String meta = req.getName() != null ? req.getName() : "Hotel #" + req.getHotelId();
             entries.add(new Entry(title, meta, req.getProcessedAt().toInstant()));
-        }
+        });
 
-        List<com.travolish.traveller.kyc.entity.HostKYC> kycRecords = new ArrayList<>();
-        kycRecords.addAll(hostKYCRepository.findByKYCStatus("VERIFIED"));
-        kycRecords.addAll(hostKYCRepository.findByKYCStatus("REJECTED"));
-        for (com.travolish.traveller.kyc.entity.HostKYC kyc : kycRecords) {
-            if (kyc.getUpdatedAt() == null) continue;
+        hostKYCRepository.findRecentByStatuses(
+                List.of("VERIFIED", "REJECTED"),
+                PageRequest.of(0, 8)
+        ).forEach(kyc -> {
             String title = "VERIFIED".equals(kyc.getKycStatus()) ? "KYC verified" : "KYC rejected";
             String first = kyc.getFirstName() != null ? kyc.getFirstName() : "";
             String last = kyc.getLastName() != null ? kyc.getLastName() : "";
             String name = (first + " " + last).trim();
             String meta = name.isEmpty() ? "Host #" + kyc.getHostId() : name;
             entries.add(new Entry(title, meta, kyc.getUpdatedAt().toInstant(ZoneOffset.UTC)));
-        }
+        });
 
         Instant now = Instant.now();
         return entries.stream()
@@ -136,29 +130,26 @@ public class AdminDashboardController {
         return days + " day" + (days == 1 ? "" : "s") + " ago";
     }
 
-    private List<AdminDashboardStatsDTO.DayTrendDTO> buildWeekTrend(List<Booking> bookings) {
-        LocalDate today = LocalDate.now();
-        LocalDate weekStart = today.minusDays(6);
+    private List<AdminDashboardStatsDTO.DayTrendDTO> buildWeekTrend(List<Object[]> rows, LocalDate today) {
+        record DayStats(long count, double revenue) {}
 
-        Map<LocalDate, List<Booking>> byDay = bookings.stream()
-                .filter(b -> b.getCheckInDate() != null
-                        && !b.getCheckInDate().isBefore(weekStart)
-                        && !b.getCheckInDate().isAfter(today))
-                .collect(Collectors.groupingBy(Booking::getCheckInDate));
+        Map<LocalDate, DayStats> byDay = new HashMap<>();
+        for (Object[] row : rows) {
+            LocalDate date = (LocalDate) row[0];
+            long count = ((Number) row[1]).longValue();
+            double revenue = row[2] != null ? ((Number) row[2]).doubleValue() : 0.0;
+            byDay.put(date, new DayStats(count, revenue));
+        }
 
         List<AdminDashboardStatsDTO.DayTrendDTO> trend = new ArrayList<>();
         for (int i = 6; i >= 0; i--) {
             LocalDate date = today.minusDays(i);
-            List<Booking> dayBookings = byDay.getOrDefault(date, List.of());
-            long count = dayBookings.size();
-            double revenue = dayBookings.stream()
-                    .mapToDouble(b -> b.getTotalPrice() != null ? b.getTotalPrice() : 0)
-                    .sum();
+            DayStats stats = byDay.getOrDefault(date, new DayStats(0, 0.0));
             String label = DAY_LABELS[date.getDayOfWeek().getValue() - 1];
             trend.add(AdminDashboardStatsDTO.DayTrendDTO.builder()
                     .label(label)
-                    .bookings(count)
-                    .revenue(revenue)
+                    .bookings(stats.count())
+                    .revenue(stats.revenue())
                     .build());
         }
         return trend;

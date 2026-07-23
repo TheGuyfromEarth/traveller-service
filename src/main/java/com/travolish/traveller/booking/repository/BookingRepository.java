@@ -3,6 +3,8 @@ package com.travolish.traveller.booking.repository;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -129,4 +131,20 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     /** All bookings for a set of hotel IDs — used to avoid per-hotel findByHotelId() N+1. */
     List<Booking> findByHotelIdIn(List<Long> hotelIds);
+
+    long countByStatus(Booking.BookingStatus status);
+
+    @Query("SELECT b FROM Booking b WHERE " +
+           "(:searchPattern IS NULL OR LOWER(b.guestName) LIKE :searchPattern OR LOWER(b.guestEmail) LIKE :searchPattern) " +
+           "AND (:status IS NULL OR b.status = :status)")
+    Page<Booking> findAdminBookings(
+            @Param("searchPattern") String searchPattern,
+            @Param("status") Booking.BookingStatus status,
+            Pageable pageable);
+
+    @Query("SELECT b.checkInDate, COUNT(b), SUM(b.totalPrice) " +
+           "FROM Booking b WHERE b.checkInDate >= :weekStart AND b.checkInDate <= :today " +
+           "GROUP BY b.checkInDate")
+    List<Object[]> countAndRevenueByCheckInDateBetween(@Param("weekStart") LocalDate weekStart,
+                                                       @Param("today") LocalDate today);
 }

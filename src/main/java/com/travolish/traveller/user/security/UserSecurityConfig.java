@@ -90,6 +90,9 @@ public class UserSecurityConfig {
                         // HotelServiceImpl.create() promotes the user to HOST role in the DB.
                         // Sub-resource operations on existing hotels still require HOST or ADMIN.
                         .requestMatchers(HttpMethod.POST, "/api/hotels").authenticated()
+                        // Admin-only hotel operations (must come before the HOST+ADMIN catch-all below)
+                        .requestMatchers(HttpMethod.PATCH, "/api/hotels/*/status").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/hotels/*/request-documents").hasRole("ADMIN")
                         // Host + admin
                         .requestMatchers(HttpMethod.POST, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")

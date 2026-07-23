@@ -6,6 +6,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -376,6 +379,12 @@ public class BookingServiceImpl implements BookingService {
         } catch (Exception e) {
             log.warn("Failed to send host cancellation notification for booking {}: {}", booking.getId(), e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Booking> findAdminBookings(String searchPattern, Booking.BookingStatus status, Pageable pageable) {
+        return bookingRepository.findAdminBookings(searchPattern, status, pageable);
     }
 
     @Override

@@ -14,6 +14,7 @@ public interface HotelService {
     Optional<Hotel> update(Long id, Hotel hotel);
     Optional<Hotel> updateStatus(Long id, Hotel.HotelStatus status);
     Optional<Hotel> updateStatus(Long id, Hotel.HotelStatus status, String adminNote);
+    Optional<Hotel> submitForReview(Long id);
     void delete(Long id);
     Optional<Hotel> updateImageUrl(Long id, String imageUrl);
     Optional<Hotel> updateVideoUrl(Long id, String videoUrl);

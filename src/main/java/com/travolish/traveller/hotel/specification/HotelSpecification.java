@@ -63,4 +63,9 @@ public class HotelSpecification {
         };
     }
 
+    public static Specification<Hotel> withStatus(Hotel.HotelStatus status) {
+        return (root, query, cb) ->
+                status == null ? cb.conjunction() : cb.equal(root.get("status"), status);
+    }
+
 }

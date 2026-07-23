@@ -1,5 +1,6 @@
 package com.travolish.traveller.hotel.service;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,18 +35,20 @@ public class HotelSearchService {
     @Cacheable(value = "hotel-search")
     @Transactional(readOnly = true)
     public Page<HotelSearchResponse> searchHotels(HotelSearchRequest searchRequest) {
-        Specification<Hotel> spec = buildSpecification(searchRequest);
+        Specification<Hotel> spec = buildSpecification(searchRequest)
+                .and(HotelSpecification.withStatus(Hotel.HotelStatus.LIVE));
         Pageable pageable = PageRequest.of(searchRequest.getPageNumber(), searchRequest.getPageSize());
         Page<Hotel> hotelPage = hotelRepository.findAll(spec, pageable);
 
         List<Hotel> hotels = hotelPage.getContent();
         List<Long> ids = hotels.stream().map(Hotel::getId).collect(Collectors.toList());
-        Map<Long, Integer> reviewCounts = hotelRepository.countReviewsByHotelIds(ids)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row[0]).longValue(),
-                        row -> ((Number) row[1]).intValue()
-                ));
+        Map<Long, Integer> reviewCounts = ids.isEmpty() ? Collections.emptyMap()
+                : hotelRepository.countReviewsByHotelIds(ids)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                row -> ((Number) row[0]).longValue(),
+                                row -> ((Number) row[1]).intValue()
+                        ));
 
         List<HotelSearchResponse> responseList = hotels.stream()
                 .map(h -> mapToResponse(h, reviewCounts.getOrDefault(h.getId(), 0)))

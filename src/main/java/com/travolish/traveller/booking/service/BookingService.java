@@ -4,6 +4,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.dto.BookingPriceDTO;
 
@@ -56,4 +59,6 @@ public interface BookingService {
     List<Booking> findByGuestEmail(String guestEmail);
 
     List<Booking> findByUserId(Long userId);
+
+    Page<Booking> findAdminBookings(String searchPattern, Booking.BookingStatus status, Pageable pageable);
 }

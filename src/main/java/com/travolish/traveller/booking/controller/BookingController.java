@@ -1,22 +1,27 @@
 package com.travolish.traveller.booking.controller;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import com.travolish.traveller.booking.dto.BookingPriceDTO;
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.service.BookingService;
-import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
 
 @RestController
@@ -36,29 +41,39 @@ public class BookingController {
     }
 
     /**
-     * Admin-enriched booking list — includes hotelName resolved from HotelRepository.
-     * Used by the admin bookings table so admins see hotel names instead of raw IDs.
+     * Admin-enriched booking list — paginated, server-side search and status filter.
+     * Uses scalar hotel name lookup to avoid loading Hotel entity with 10 eager collections.
      */
     @GetMapping("/admin")
-    public List<Map<String, Object>> listAdmin(
-            @RequestParam(required = false) String search) {
-        List<Booking> all = bookingService.findAll();
-        if (search != null && !search.isBlank()) {
-            String q = search.trim().toLowerCase();
-            all = all.stream()
-                    .filter(b -> (b.getGuestName() != null && b.getGuestName().toLowerCase().contains(q))
-                            || (b.getGuestEmail() != null && b.getGuestEmail().toLowerCase().contains(q))
-                            || (b.getId() != null && b.getId().toString().contains(q)))
-                    .collect(Collectors.toList());
-        }
-        Set<Long> hotelIds = all.stream()
-                .map(Booking::getHotelId)
-                .filter(id -> id != null)
-                .collect(Collectors.toSet());
-        Map<Long, String> nameMap = hotelRepository.findAllById(hotelIds).stream()
-                .collect(Collectors.toMap(Hotel::getId, Hotel::getName));
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> listAdmin(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
 
-        return all.stream().map(b -> {
+        String searchPattern = (search == null || search.isBlank())
+                ? null
+                : "%" + search.trim().toLowerCase() + "%";
+
+        Booking.BookingStatus statusEnum = null;
+        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
+            try { statusEnum = Booking.BookingStatus.valueOf(status.toUpperCase()); }
+            catch (IllegalArgumentException ignored) {}
+        }
+
+        Page<Booking> bookingPage = bookingService.findAdminBookings(
+                searchPattern, statusEnum,
+                PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        Set<Long> hotelIds = bookingPage.getContent().stream()
+                .map(Booking::getHotelId).filter(Objects::nonNull).collect(Collectors.toSet());
+
+        Map<Long, String> nameMap = hotelIds.isEmpty() ? Collections.emptyMap()
+                : hotelRepository.findIdAndNameByIdIn(hotelIds).stream()
+                        .collect(Collectors.toMap(r -> (Long) r[0], r -> (String) r[1]));
+
+        List<Map<String, Object>> content = bookingPage.getContent().stream().map(b -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id",          b.getId());
             m.put("hotelId",     b.getHotelId());
@@ -73,6 +88,14 @@ public class BookingController {
             m.put("notes",       b.getNotes());
             return m;
         }).collect(Collectors.toList());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("content",       content);
+        result.put("totalElements", bookingPage.getTotalElements());
+        result.put("totalPages",    bookingPage.getTotalPages());
+        result.put("page",          page);
+        result.put("size",          size);
+        return result;
     }
 
     /** On-demand status refresh — called by trips page on load so users never see stale PENDING for past stays. */

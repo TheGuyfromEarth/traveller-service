@@ -1,6 +1,7 @@
 package com.travolish.traveller.kyc.repository;
 
 import com.travolish.traveller.kyc.entity.HostKYC;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -31,4 +32,9 @@ public interface HostKYCRepository extends JpaRepository<HostKYC, Long> {
     
     @Query("SELECT COUNT(hk) FROM HostKYC hk WHERE hk.kycStatus = 'VERIFIED'")
     Integer countVerifiedHosts();
+
+    long countByKycStatus(String kycStatus);
+
+    @Query("SELECT k FROM HostKYC k WHERE k.kycStatus IN :statuses AND k.updatedAt IS NOT NULL ORDER BY k.updatedAt DESC")
+    List<HostKYC> findRecentByStatuses(@Param("statuses") List<String> statuses, Pageable pageable);
 }

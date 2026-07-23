@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import com.travolish.traveller.booking.model.Booking;
@@ -12,6 +13,7 @@ import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
 
 @Component
+@ConditionalOnProperty(name = "app.init-test-data", havingValue = "true", matchIfMissing = false)
 public class DataSeeder implements CommandLineRunner {
 
     private final HotelRepository hotelRepository;

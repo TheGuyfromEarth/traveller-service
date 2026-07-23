@@ -6,6 +6,7 @@ import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.service.HotelService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
@@ -32,7 +33,8 @@ public class HotelController {
         } else if (status != null) {
             results = hotelService.findByStatus(status);
         } else {
-            results = hotelService.findAll();
+            // Default to LIVE-only for public listing; callers that need all statuses must pass ?status=
+            results = hotelService.findByStatus(Hotel.HotelStatus.LIVE);
         }
         if (search != null && !search.isBlank()) {
             String q = search.trim().toLowerCase();
@@ -63,12 +65,19 @@ public class HotelController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Hotel> update(@PathVariable Long id, @Validated @RequestBody Hotel hotel) {
+    public ResponseEntity<Hotel> update(@PathVariable Long id, @Validated @RequestBody Hotel hotel,
+            Authentication authentication) {
+        // Hosts cannot change status via PUT — only admins may do so via PATCH /{id}/status.
+        // Stripping status here means HotelServiceImpl.update() leaves the existing value intact.
+        if (!isAdmin(authentication)) {
+            hotel.setStatus(null);
+        }
         return hotelService.update(id, hotel)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/status")
     public ResponseEntity<Hotel> updateStatus(
             @PathVariable Long id,
@@ -83,6 +92,7 @@ public class HotelController {
      * Request additional documents from the host — returns the listing to DRAFT
      * with an admin note explaining what is needed.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/request-documents")
     public ResponseEntity<Hotel> requestDocuments(
             @PathVariable Long id,
@@ -91,6 +101,26 @@ public class HotelController {
         return hotelService.updateStatus(id, Hotel.HotelStatus.DRAFT, note)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Host submits a DRAFT listing for admin review.
+     * Returns 409 if the listing is not currently in DRAFT status.
+     */
+    @PostMapping("/{id}/submit-for-review")
+    public ResponseEntity<Hotel> submitForReview(@PathVariable Long id) {
+        try {
+            return hotelService.submitForReview(id)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        }
+    }
+
+    private boolean isAdmin(Authentication auth) {
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     @DeleteMapping("/{id}")
