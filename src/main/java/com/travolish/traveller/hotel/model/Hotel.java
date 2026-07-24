@@ -166,6 +166,8 @@ public class Hotel {
 
     private Boolean lastMinuteBooking = false;
 
+    private Integer lastMinuteCutoffHours;
+
     private Boolean sameDayBooking = false;
 
     private String checkInTime;
@@ -207,6 +209,35 @@ public class Hotel {
     @CollectionTable(name = "hotel_sustainability", joinColumns = @JoinColumn(name = "hotel_id"))
     @Column(name = "feature")
     private List<String> sustainabilityFeatures = new ArrayList<>();
+
+    // §18 — Contact
+    private String contactPerson;
+
+    private String websiteUrl;
+
+    private String emergencyContact;
+
+    // §19 — Bed details
+    private String primaryBedType;
+
+    private String secondaryBedType;
+
+    // §20 — AI & SEO
+    @BatchSize(size = 50)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_target_audience", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "audience")
+    private List<String> targetAudience = new ArrayList<>();
+
+    @BatchSize(size = 50)
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "hotel_usp", joinColumns = @JoinColumn(name = "hotel_id"))
+    @Column(name = "usp")
+    private List<String> usp = new ArrayList<>();
+
+    private String nearbyLandmark;
+
+    private Boolean aiTranslation = false;
 
     @Enumerated(EnumType.STRING)
     @Column

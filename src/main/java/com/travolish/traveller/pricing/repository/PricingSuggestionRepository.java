@@ -4,7 +4,9 @@ import com.travolish.traveller.pricing.entity.PricingSuggestion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,4 +29,10 @@ public interface PricingSuggestionRepository extends JpaRepository<PricingSugges
     
     @Query("SELECT ps FROM PricingSuggestion ps WHERE ps.roomId = :roomId AND ps.status = 'PENDING' ORDER BY ps.confidenceScore DESC")
     List<PricingSuggestion> findPendingSuggestionsByConfidence(Long roomId);
+
+    @Modifying
+    @Query("UPDATE PricingSuggestion ps SET ps.status = com.travolish.traveller.pricing.entity.PricingSuggestion.SuggestionStatus.EXPIRED " +
+           "WHERE ps.status = com.travolish.traveller.pricing.entity.PricingSuggestion.SuggestionStatus.PENDING " +
+           "AND ps.suggestedToDate < :today")
+    int expirePendingSuggestions(@Param("today") LocalDate today);
 }

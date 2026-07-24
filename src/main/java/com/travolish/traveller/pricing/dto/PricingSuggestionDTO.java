@@ -30,4 +30,5 @@ public class PricingSuggestionDTO {
     private Integer competitorAvgPrice;
     private Integer demandLevel;
     private LocalDateTime createdAt;
+    private String roomName;
 }

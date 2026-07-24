@@ -1,7 +1,10 @@
 package com.travolish.traveller.pricing.controller;
 
+import com.travolish.traveller.pricing.dto.CompetitorAnalysisDTO;
+import com.travolish.traveller.pricing.dto.DemandAnalysisDTO;
 import com.travolish.traveller.pricing.dto.PricingSuggestionDTO;
 import com.travolish.traveller.pricing.dto.PricingSuggestionRequest;
+import com.travolish.traveller.pricing.dto.SeasonalPricingDTO;
 import com.travolish.traveller.pricing.service.PricingAIService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,10 +26,6 @@ public class PricingAIController {
 
     private final PricingAIService pricingAIService;
 
-    /**
-     * Generate pricing suggestion using AI
-     * POST /api/pricing/suggestions/generate
-     */
     @PostMapping("/generate")
     public ResponseEntity<List<PricingSuggestionDTO>> generateSuggestion(
             @Valid @RequestBody PricingSuggestionRequest request) {
@@ -45,105 +44,86 @@ public class PricingAIController {
         }
     }
 
-    /**
-     * Get all suggestions for hotel
-     * GET /api/pricing/suggestions/hotel/{hotelId}
-     */
     @GetMapping("/hotel/{hotelId}")
     public ResponseEntity<List<PricingSuggestionDTO>> getSuggestionsForHotel(
             @PathVariable Long hotelId) {
-        List<PricingSuggestionDTO> suggestions = pricingAIService.getSuggestionsForHotel(hotelId);
-        return ResponseEntity.ok(suggestions);
+        return ResponseEntity.ok(pricingAIService.getSuggestionsForHotel(hotelId));
     }
 
-    /**
-     * Get all suggestions for room
-     * GET /api/pricing/suggestions/room/{roomId}
-     */
     @GetMapping("/room/{roomId}")
     public ResponseEntity<List<PricingSuggestionDTO>> getSuggestionsForRoom(
             @PathVariable Long roomId) {
-        List<PricingSuggestionDTO> suggestions = pricingAIService.getSuggestionsForRoom(roomId);
-        return ResponseEntity.ok(suggestions);
+        return ResponseEntity.ok(pricingAIService.getSuggestionsForRoom(roomId));
     }
 
-    /**
-     * Get pending suggestions (paginated)
-     * GET /api/pricing/suggestions/pending
-     */
     @GetMapping("/pending")
     public ResponseEntity<Page<PricingSuggestionDTO>> getPendingSuggestions(
             @RequestParam Long hotelId,
             Pageable pageable) {
-        Page<PricingSuggestionDTO> suggestions = pricingAIService.getPendingSuggestionsForHotel(hotelId, pageable);
-        return ResponseEntity.ok(suggestions);
+        return ResponseEntity.ok(pricingAIService.getPendingSuggestionsForHotel(hotelId, pageable));
     }
 
-    /**
-     * Accept pricing suggestion
-     * POST /api/pricing/suggestions/{suggestionId}/accept
-     */
     @PostMapping("/{suggestionId}/accept")
     public ResponseEntity<PricingSuggestionDTO> acceptSuggestion(
             @PathVariable Long suggestionId) {
         try {
             log.info("Accepting pricing suggestion: {}", suggestionId);
-            PricingSuggestionDTO suggestion = pricingAIService.acceptSuggestion(suggestionId);
-            return ResponseEntity.ok(suggestion);
+            return ResponseEntity.ok(pricingAIService.acceptSuggestion(suggestionId));
+        } catch (RuntimeException e) {
+            log.error("Error accepting suggestion {}: {}", suggestionId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
             log.error("Error accepting suggestion", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
-    /**
-     * Reject pricing suggestion
-     * POST /api/pricing/suggestions/{suggestionId}/reject
-     */
     @PostMapping("/{suggestionId}/reject")
     public ResponseEntity<PricingSuggestionDTO> rejectSuggestion(
             @PathVariable Long suggestionId,
             @RequestParam(required = false) String reason) {
         try {
             log.info("Rejecting pricing suggestion: {}", suggestionId);
-            PricingSuggestionDTO suggestion = pricingAIService.rejectSuggestion(suggestionId, reason);
-            return ResponseEntity.ok(suggestion);
+            return ResponseEntity.ok(pricingAIService.rejectSuggestion(suggestionId, reason));
+        } catch (RuntimeException e) {
+            log.error("Error rejecting suggestion {}: {}", suggestionId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
             log.error("Error rejecting suggestion", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
-    /**
-     * Analyze demand trends
-     * GET /api/pricing/suggestions/analyze/demand
-     */
     @GetMapping("/analyze/demand")
-    public ResponseEntity<List<PricingSuggestionDTO>> analyzeDemandTrends(
+    public ResponseEntity<DemandAnalysisDTO> analyzeDemandTrends(
             @RequestParam Long hotelId) {
-        List<PricingSuggestionDTO> analysis = pricingAIService.analyzeDemandTrends(hotelId);
-        return ResponseEntity.ok(analysis);
+        try {
+            return ResponseEntity.ok(pricingAIService.analyzeDemandTrends(hotelId));
+        } catch (Exception e) {
+            log.error("Error analyzing demand trends for hotel {}", hotelId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
-    /**
-     * Analyze competitor pricing
-     * GET /api/pricing/suggestions/analyze/competitors
-     */
     @GetMapping("/analyze/competitors")
-    public ResponseEntity<List<PricingSuggestionDTO>> analyzeCompetitorPricing(
+    public ResponseEntity<CompetitorAnalysisDTO> analyzeCompetitorPricing(
             @RequestParam Long hotelId) {
-        List<PricingSuggestionDTO> analysis = pricingAIService.analyzeCompetitorPricing(hotelId);
-        return ResponseEntity.ok(analysis);
+        try {
+            return ResponseEntity.ok(pricingAIService.analyzeCompetitorPricing(hotelId));
+        } catch (Exception e) {
+            log.error("Error analyzing competitor pricing for hotel {}", hotelId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
-    /**
-     * Generate seasonal pricing suggestions
-     * GET /api/pricing/suggestions/seasonal
-     */
     @GetMapping("/seasonal")
-    public ResponseEntity<List<PricingSuggestionDTO>> generateSeasonalSuggestions(
+    public ResponseEntity<SeasonalPricingDTO> generateSeasonalSuggestions(
             @RequestParam Long hotelId) {
-        List<PricingSuggestionDTO> suggestions = pricingAIService.generateSeasonalPricingSuggestions(hotelId);
-        return ResponseEntity.ok(suggestions);
+        try {
+            return ResponseEntity.ok(pricingAIService.generateSeasonalPricingSuggestions(hotelId));
+        } catch (Exception e) {
+            log.error("Error generating seasonal suggestions for hotel {}", hotelId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 }

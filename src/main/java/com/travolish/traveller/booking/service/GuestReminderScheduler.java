@@ -4,6 +4,8 @@ import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.repository.BookingRepository;
 import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.hosttools.entity.AutoReplyTemplate;
+import com.travolish.traveller.hosttools.repository.AutoReplyTemplateRepository;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
 import com.travolish.traveller.notifications.entity.NotificationChannel;
 import com.travolish.traveller.notifications.entity.NotificationType;
@@ -16,6 +18,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +31,11 @@ import java.util.stream.Collectors;
  *  Pre-arrival  : 48 h before check-in  (daily at 08:00)
  *  Check-in day : morning of check-in   (daily at 08:00)
  *  Checkout     : evening before        (daily at 18:00)
+ *
+ * If a host has an active AutoReplyTemplate for the matching trigger keyword, the
+ * template text is used as the message body. If the host explicitly deactivated
+ * the template, the reminder is skipped for their guests. If no template exists,
+ * the hardcoded default body is sent.
  */
 @Component
 @RequiredArgsConstructor
@@ -38,6 +46,7 @@ public class GuestReminderScheduler {
     private final HotelRepository hotelRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final AutoReplyTemplateRepository autoReplyTemplateRepository;
 
     /** Pre-arrival + check-in-day reminders sent at 08:00 every morning. */
     @Scheduled(cron = "0 0 8 * * *")
@@ -45,15 +54,13 @@ public class GuestReminderScheduler {
         LocalDate today = LocalDate.now();
         LocalDate dayAfterTomorrow = today.plusDays(2);
 
-        // Pre-arrival: check-in exactly 48 h from now — DB-filtered, no findAll()
         List<Booking> preArrival = bookingRepository
             .findByStatusAndCheckInDate(Booking.BookingStatus.CONFIRMED, dayAfterTomorrow);
-        sendBatch(preArrival, NotificationType.BOOKING_REMINDER, "Your check-in is in 2 days!", "pre-arrival");
+        sendBatch(preArrival, NotificationType.BOOKING_REMINDER, "Your check-in is in 2 days!", "pre-arrival", "pre-arrival");
 
-        // Check-in day note
         List<Booking> checkInToday = bookingRepository
             .findByStatusAndCheckInDate(Booking.BookingStatus.CONFIRMED, today);
-        sendBatch(checkInToday, NotificationType.CHECK_IN_REMINDER, "Today is your check-in day!", "check-in day");
+        sendBatch(checkInToday, NotificationType.CHECK_IN_REMINDER, "Today is your check-in day!", "check-in day", "check-in");
     }
 
     /** Checkout reminders sent at 18:00 the evening before checkout. */
@@ -66,35 +73,57 @@ public class GuestReminderScheduler {
                 List.of(Booking.BookingStatus.CONFIRMED, Booking.BookingStatus.COMPLETED),
                 tomorrow);
         sendBatch(checkOutTomorrow, NotificationType.CHECK_OUT_REMINDER,
-            "Checkout is tomorrow — see you again soon!", "checkout");
+            "Checkout is tomorrow — see you again soon!", "checkout", "checkout");
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 
-    /** Batch-send reminders for a list of bookings. Pre-fetches hotel names to avoid N+1. */
-    private void sendBatch(List<Booking> bookings, NotificationType type, String subject, String kind) {
+    private void sendBatch(List<Booking> bookings, NotificationType type, String subject,
+                           String kind, String triggerKeyword) {
         if (bookings.isEmpty()) {
             log.info("GuestReminderScheduler: no {} reminders to send", kind);
             return;
         }
 
-        // Batch-fetch hotel names — one query for all hotel IDs in this batch
+        // Batch-fetch hotels for names and host IDs — avoids N+1
         Set<Long> hotelIds = bookings.stream().map(Booking::getHotelId).collect(Collectors.toSet());
-        Map<Long, String> hotelNames = hotelRepository.findAllById(hotelIds).stream()
+        List<Hotel> hotels = hotelRepository.findAllById(hotelIds);
+        Map<Long, String> hotelNames = hotels.stream()
             .collect(Collectors.toMap(Hotel::getId, Hotel::getName));
+        Map<Long, Long> hotelToHostId = hotels.stream()
+            .filter(h -> h.getHostId() != null)
+            .collect(Collectors.toMap(Hotel::getId, Hotel::getHostId));
+
+        // Batch-fetch host reminder templates (active or deactivated, not archived) — one query
+        Set<Long> hostIds = new HashSet<>(hotelToHostId.values());
+        Map<Long, AutoReplyTemplate> templatesByHost = hostIds.isEmpty() ? Map.of()
+            : autoReplyTemplateRepository
+                .findByHostIdInAndTriggerKeyword(hostIds, triggerKeyword).stream()
+                .collect(Collectors.toMap(AutoReplyTemplate::getHostId, t -> t, (a, b) -> a));
 
         int sent = 0;
         for (Booking b : bookings) {
             try {
-                String hotelName = hotelNames.getOrDefault(b.getHotelId(), "your accommodation");
-                String body = switch (type) {
-                    case BOOKING_REMINDER -> buildPreArrivalBody(b, hotelName);
-                    case CHECK_IN_REMINDER -> buildCheckInBody(b, hotelName);
-                    case CHECK_OUT_REMINDER -> buildCheckOutBody(b, hotelName);
-                    default -> b.getGuestName() + ", this is a reminder about your stay at " + hotelName + ".";
-                };
+                Long hostId = hotelToHostId.get(b.getHotelId());
+                AutoReplyTemplate tmpl = hostId != null ? templatesByHost.get(hostId) : null;
 
-                // Fix: look up by userId, not booking id; fall back to guestEmail for anonymous bookings
+                // Host explicitly disabled this reminder — skip their guests
+                if (tmpl != null && Boolean.FALSE.equals(tmpl.getIsActive())) {
+                    log.debug("GuestReminderScheduler: {} reminder skipped for booking {} — host disabled",
+                        kind, b.getId());
+                    continue;
+                }
+
+                String hotelName = hotelNames.getOrDefault(b.getHotelId(), "your accommodation");
+                String body = (tmpl != null)
+                    ? tmpl.getTemplateText()
+                    : switch (type) {
+                        case BOOKING_REMINDER  -> buildPreArrivalBody(b, hotelName);
+                        case CHECK_IN_REMINDER -> buildCheckInBody(b, hotelName);
+                        case CHECK_OUT_REMINDER -> buildCheckOutBody(b, hotelName);
+                        default -> b.getGuestName() + ", this is a reminder about your stay at " + hotelName + ".";
+                    };
+
                 String recipientEmail;
                 if (b.getUserId() != null) {
                     recipientEmail = userRepository.findById(b.getUserId())
@@ -106,7 +135,7 @@ public class GuestReminderScheduler {
                 if (recipientEmail == null || recipientEmail.isBlank()) continue;
 
                 SendNotificationRequest req = new SendNotificationRequest();
-                req.setUserId(b.getUserId());      // correctly uses userId, not booking id
+                req.setUserId(b.getUserId());
                 req.setType(type);
                 req.setChannel(NotificationChannel.EMAIL);
                 req.setRecipientEmail(recipientEmail);

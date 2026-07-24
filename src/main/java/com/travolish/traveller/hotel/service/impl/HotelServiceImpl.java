@@ -103,20 +103,92 @@ public class HotelServiceImpl implements HotelService {
     })
     public Optional<Hotel> update(Long id, Hotel hotel) {
         return hotelRepository.findById(id).map(existing -> {
+            // Identity
             if (hotel.getHostId() != null) existing.setHostId(hotel.getHostId());
+
+            // Basics
             existing.setName(hotel.getName());
+            existing.setDescription(hotel.getDescription());
+            if (hotel.getHouseRules() != null) existing.setHouseRules(hotel.getHouseRules());
+            if (hotel.getCategory() != null) existing.setCategory(hotel.getCategory());
+            if (hotel.getSubTypes() != null) existing.setSubTypes(hotel.getSubTypes());
+            if (hotel.getTargetGuests() != null) existing.setTargetGuests(hotel.getTargetGuests());
+            if (hotel.getStayType() != null) existing.setStayType(hotel.getStayType());
+            if (hotel.getStarRating() != null) existing.setStarRating(hotel.getStarRating());
+            if (hotel.getBrand() != null) existing.setBrand(hotel.getBrand());
+            if (hotel.getLanguagesSpoken() != null) existing.setLanguagesSpoken(hotel.getLanguagesSpoken());
+            if (hotel.getYearBuilt() != null) existing.setYearBuilt(hotel.getYearBuilt());
+            if (hotel.getLastRenovated() != null) existing.setLastRenovated(hotel.getLastRenovated());
+
+            // Location
             existing.setAddress(hotel.getAddress());
             existing.setCity(hotel.getCity());
+            if (hotel.getState() != null) existing.setState(hotel.getState());
             existing.setCountry(hotel.getCountry());
+            existing.setPostalCode(hotel.getPostalCode());
+            if (hotel.getLatitude() != null) existing.setLatitude(hotel.getLatitude());
+            if (hotel.getLongitude() != null) existing.setLongitude(hotel.getLongitude());
+            if (hotel.getDistanceToAirport() != null) existing.setDistanceToAirport(hotel.getDistanceToAirport());
+            if (hotel.getDistanceToTrain() != null) existing.setDistanceToTrain(hotel.getDistanceToTrain());
+            if (hotel.getDistanceToCityCentre() != null) existing.setDistanceToCityCentre(hotel.getDistanceToCityCentre());
+            if (hotel.getDistanceToBeach() != null) existing.setDistanceToBeach(hotel.getDistanceToBeach());
+
+            // Capacity
+            if (hotel.getMaxGuests() != null) existing.setMaxGuests(hotel.getMaxGuests());
+            if (hotel.getNumBedrooms() != null) existing.setNumBedrooms(hotel.getNumBedrooms());
+            if (hotel.getNumBathrooms() != null) existing.setNumBathrooms(hotel.getNumBathrooms());
+            if (hotel.getNumUnits() != null) existing.setNumUnits(hotel.getNumUnits());
+
+            // Property details
+            if (hotel.getTotalRooms() != null) existing.setTotalRooms(hotel.getTotalRooms());
+            if (hotel.getTotalFloors() != null) existing.setTotalFloors(hotel.getTotalFloors());
+            if (hotel.getTotalBuildings() != null) existing.setTotalBuildings(hotel.getTotalBuildings());
+            if (hotel.getPropertySize() != null) existing.setPropertySize(hotel.getPropertySize());
+            if (hotel.getReceptionHours() != null) existing.setReceptionHours(hotel.getReceptionHours());
+            if (hotel.getTwentyFourHourFrontDesk() != null) existing.setTwentyFourHourFrontDesk(hotel.getTwentyFourHourFrontDesk());
+            if (hotel.getThreeSixtyTourUrl() != null) existing.setThreeSixtyTourUrl(hotel.getThreeSixtyTourUrl());
+
+            // Bed details
+            if (hotel.getPrimaryBedType() != null) existing.setPrimaryBedType(hotel.getPrimaryBedType());
+            if (hotel.getSecondaryBedType() != null) existing.setSecondaryBedType(hotel.getSecondaryBedType());
+
+            // Booking settings
+            if (hotel.getInstantBooking() != null) existing.setInstantBooking(hotel.getInstantBooking());
+            if (hotel.getMinimumStay() != null) existing.setMinimumStay(hotel.getMinimumStay());
+            if (hotel.getMaximumStay() != null) existing.setMaximumStay(hotel.getMaximumStay());
+            if (hotel.getBookingWindow() != null) existing.setBookingWindow(hotel.getBookingWindow());
+            if (hotel.getLastMinuteBooking() != null) existing.setLastMinuteBooking(hotel.getLastMinuteBooking());
+            if (hotel.getLastMinuteCutoffHours() != null) existing.setLastMinuteCutoffHours(hotel.getLastMinuteCutoffHours());
+            if (hotel.getSameDayBooking() != null) existing.setSameDayBooking(hotel.getSameDayBooking());
+            if (hotel.getCheckInTime() != null) existing.setCheckInTime(hotel.getCheckInTime());
+            if (hotel.getCheckOutTime() != null) existing.setCheckOutTime(hotel.getCheckOutTime());
+
+            // Amenities & services
+            if (hotel.getAmenities() != null) existing.setAmenities(hotel.getAmenities());
+            if (hotel.getMealOptions() != null) existing.setMealOptions(hotel.getMealOptions());
+            if (hotel.getTransportationOptions() != null) existing.setTransportationOptions(hotel.getTransportationOptions());
+            if (hotel.getGuestServices() != null) existing.setGuestServices(hotel.getGuestServices());
+            if (hotel.getSustainabilityFeatures() != null) existing.setSustainabilityFeatures(hotel.getSustainabilityFeatures());
+
+            // Contact
             existing.setRating(hotel.getRating());
             existing.setPhone(hotel.getPhone());
             existing.setEmail(hotel.getEmail());
-            existing.setDescription(hotel.getDescription());
-            if (hotel.getHouseRules() != null) existing.setHouseRules(hotel.getHouseRules());
-            if (hotel.getInstantBooking() != null) existing.setInstantBooking(hotel.getInstantBooking());
-            if (hotel.getMinimumStay() != null) existing.setMinimumStay(hotel.getMinimumStay());
-            if (hotel.getCheckInTime() != null) existing.setCheckInTime(hotel.getCheckInTime());
-            if (hotel.getCheckOutTime() != null) existing.setCheckOutTime(hotel.getCheckOutTime());
+            if (hotel.getContactPerson() != null) existing.setContactPerson(hotel.getContactPerson());
+            if (hotel.getWebsiteUrl() != null) existing.setWebsiteUrl(hotel.getWebsiteUrl());
+            if (hotel.getEmergencyContact() != null) existing.setEmergencyContact(hotel.getEmergencyContact());
+
+            // AI & SEO
+            if (hotel.getTargetAudience() != null) existing.setTargetAudience(hotel.getTargetAudience());
+            if (hotel.getUsp() != null) existing.setUsp(hotel.getUsp());
+            if (hotel.getNearbyLandmark() != null) existing.setNearbyLandmark(hotel.getNearbyLandmark());
+            if (hotel.getAiTranslation() != null) existing.setAiTranslation(hotel.getAiTranslation());
+
+            // Media
+            if (hotel.getImageUrl() != null) existing.setImageUrl(hotel.getImageUrl());
+            if (hotel.getVideoUrl() != null) existing.setVideoUrl(hotel.getVideoUrl());
+
+            // Status (host-facing; admin note)
             if (hotel.getStatus() != null) {
                 // Guard: DRAFT listings cannot jump directly to LIVE — they must go through
                 // PENDING_REVIEW via the submit-for-review endpoint first.
@@ -127,8 +199,8 @@ public class HotelServiceImpl implements HotelService {
                 }
                 existing.setStatus(hotel.getStatus());
             }
-            if (hotel.getImageUrl() != null) existing.setImageUrl(hotel.getImageUrl());
-            if (hotel.getVideoUrl() != null) existing.setVideoUrl(hotel.getVideoUrl());
+            if (hotel.getAdminNote() != null) existing.setAdminNote(hotel.getAdminNote());
+
             return hotelRepository.save(existing);
         });
     }

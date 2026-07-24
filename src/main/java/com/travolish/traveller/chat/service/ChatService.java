@@ -26,6 +26,7 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final ModelMapper modelMapper;
     private final AssistantReplyService assistantReplyService;
+    private final HostAutoReplyService hostAutoReplyService;
     
     // Conversation Methods
     
@@ -107,9 +108,12 @@ public class ChatService {
 
         conversationRepository.save(conversation);
 
-        // Trigger AI reply asynchronously when message is directed to the support assistant (id=4)
+        // Trigger AI reply asynchronously when message is directed to the support assistant (id=4),
+        // otherwise check if the host has a matching keyword auto-reply template.
         if (Long.valueOf(4L).equals(receiverId)) {
             assistantReplyService.generateAndSaveReply(conversationId, senderId, messageText);
+        } else {
+            hostAutoReplyService.triggerAutoReply(conversationId, senderId, receiverId, messageText);
         }
 
         return modelMapper.map(message, MessageDTO.class);
