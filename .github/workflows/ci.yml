@@ -50,7 +50,13 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Configure GCS bucket CORS
+        env:
+          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
         run: |
+          if [ -z "$GCS_BUCKET_NAME" ]; then
+            echo "GCS_BUCKET_NAME secret not set — skipping CORS configuration"
+            exit 0
+          fi
           cat > /tmp/cors.json << 'EOF'
           [
             {
@@ -61,7 +67,7 @@ jobs:
             }
           ]
           EOF
-          gsutil cors set /tmp/cors.json gs://${{ secrets.GCS_BUCKET_NAME }}
+          gsutil cors set /tmp/cors.json "gs://$GCS_BUCKET_NAME"
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
