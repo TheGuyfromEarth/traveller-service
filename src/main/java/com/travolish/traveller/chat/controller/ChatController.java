@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -74,10 +76,14 @@ public class ChatController {
      * POST /api/chat/messages
      */
     @PostMapping("/messages")
-    public ResponseEntity<MessageDTO> sendMessage(@RequestBody SendMessageRequest request) {
+    public ResponseEntity<MessageDTO> sendMessage(
+            @RequestBody SendMessageRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        Long senderId = Long.parseLong(jwt.getSubject());
         MessageDTO message = chatService.sendMessage(
             request.getConversationId(),
-            request.getConversationId(), // Will be set by user context in production
+            senderId,
             request.getReceiverId(),
             request.getMessageText()
         );

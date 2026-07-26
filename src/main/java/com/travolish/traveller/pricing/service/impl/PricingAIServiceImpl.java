@@ -279,7 +279,7 @@ public class PricingAIServiceImpl implements PricingAIService {
                 .positionNote(positionNote)
                 .competitorOccupancy(String.format("%.0f%%", compOcc))
                 .occupancyNote("Estimated competitor occupancy (next 30 days)")
-                .priceGap(String.format("%s$%.0f", priceGap >= 0 ? "+" : "", priceGap))
+                .priceGap(String.format("%s$%.0f", priceGap >= 0 ? "+" : "-", Math.abs(priceGap)))
                 .gapNote("Your average rate vs estimated comp set")
                 .build();
     }

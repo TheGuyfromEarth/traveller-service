@@ -1,5 +1,6 @@
 package com.travolish.traveller.kyc.controller;
 
+import com.travolish.traveller.admin.audit.AuditLogService;
 import com.travolish.traveller.kyc.dto.HostKYCDTO;
 import com.travolish.traveller.kyc.entity.HostKYC;
 import com.travolish.traveller.kyc.repository.HostKYCRepository;
@@ -22,6 +23,7 @@ public class AdminKYCController {
 
     private final HostKYCRepository hostKYCRepository;
     private final ModelMapper modelMapper;
+    private final AuditLogService auditLogService;
 
     @GetMapping
     public ResponseEntity<List<HostKYCDTO>> getAllKYC(
@@ -95,6 +97,7 @@ public class AdminKYCController {
             kyc.setKycStatus("VERIFIED");
             kyc.setVerificationDate(LocalDateTime.now());
             HostKYC saved = hostKYCRepository.save(kyc);
+            auditLogService.log("KYC", id, "KYC_APPROVED", "Host KYC verified for host " + kyc.getHostId());
             log.info("KYC {} approved by admin", id);
             return ResponseEntity.ok(modelMapper.map(saved, HostKYCDTO.class));
         }).orElse(ResponseEntity.notFound().build());
@@ -110,6 +113,7 @@ public class AdminKYCController {
             kyc.setRejectionReason(reason);
             kyc.setRejectionDate(LocalDateTime.now());
             HostKYC saved = hostKYCRepository.save(kyc);
+            auditLogService.log("KYC", id, "KYC_REJECTED", "Reason: " + reason);
             log.info("KYC {} rejected by admin: {}", id, reason);
             return ResponseEntity.ok(modelMapper.map(saved, HostKYCDTO.class));
         }).orElse(ResponseEntity.notFound().build());
@@ -123,6 +127,7 @@ public class AdminKYCController {
         return hostKYCRepository.findById(id).map(kyc -> {
             kyc.setReviewerId(reviewerId);
             HostKYC saved = hostKYCRepository.save(kyc);
+            auditLogService.log("KYC", id, "KYC_REVIEWER_ASSIGNED", "Assigned to reviewer " + reviewerId);
             log.info("KYC {} assigned to reviewer {}", id, reviewerId);
             return ResponseEntity.ok(modelMapper.map(saved, HostKYCDTO.class));
         }).orElse(ResponseEntity.notFound().build());
@@ -137,6 +142,7 @@ public class AdminKYCController {
             kyc.setKycStatus("RESUBMIT_REQUESTED");
             kyc.setNotes(reason);
             HostKYC saved = hostKYCRepository.save(kyc);
+            auditLogService.log("KYC", id, "KYC_RESUBMIT_REQUESTED", "Reason: " + reason);
             log.info("KYC {} resubmission requested: {}", id, reason);
             return ResponseEntity.ok(modelMapper.map(saved, HostKYCDTO.class));
         }).orElse(ResponseEntity.notFound().build());

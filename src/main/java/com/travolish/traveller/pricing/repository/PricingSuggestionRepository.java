@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -31,8 +32,10 @@ public interface PricingSuggestionRepository extends JpaRepository<PricingSugges
     List<PricingSuggestion> findPendingSuggestionsByConfidence(Long roomId);
 
     @Modifying
-    @Query("UPDATE PricingSuggestion ps SET ps.status = com.travolish.traveller.pricing.entity.PricingSuggestion.SuggestionStatus.EXPIRED " +
+    @Query("UPDATE PricingSuggestion ps " +
+           "SET ps.status = com.travolish.traveller.pricing.entity.PricingSuggestion.SuggestionStatus.EXPIRED, " +
+           "ps.updatedAt = :now " +
            "WHERE ps.status = com.travolish.traveller.pricing.entity.PricingSuggestion.SuggestionStatus.PENDING " +
            "AND ps.suggestedToDate < :today")
-    int expirePendingSuggestions(@Param("today") LocalDate today);
+    int expirePendingSuggestions(@Param("today") LocalDate today, @Param("now") LocalDateTime now);
 }

@@ -58,7 +58,8 @@ public class HotelSpecification {
             String pattern = "%" + query.toLowerCase() + "%";
             return cb.or(
                 cb.like(cb.lower(root.get("name")), pattern),
-                cb.like(cb.lower(root.get("city")), pattern)
+                cb.like(cb.lower(root.get("city")), pattern),
+                cb.like(cb.lower(root.get("country")), pattern)
             );
         };
     }

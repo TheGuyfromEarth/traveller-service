@@ -16,6 +16,7 @@ import com.travolish.traveller.inventory.exception.OverbookingException;
 import com.travolish.traveller.inventory.model.RoomAvailability;
 import com.travolish.traveller.inventory.repository.RoomAvailabilityRepository;
 import com.travolish.traveller.inventory.service.AvailabilityService;
+import com.travolish.traveller.hotel.repository.RoomRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class AvailabilityServiceImpl implements AvailabilityService {
 
     private final RoomAvailabilityRepository availabilityRepository;
+    private final RoomRepository roomRepository;
 
     @Override
     public Boolean isRoomAvailableOnDate(Long roomId, LocalDate date) {
@@ -193,12 +195,23 @@ public class AvailabilityServiceImpl implements AvailabilityService {
         var total = availabilityRepository.getTotalAvailableRoomsOnDate(hotelId, date);
         var booked = availabilityRepository.getTotalBookedRoomsOnDate(hotelId, date);
 
+        int availCount = total.orElse(0);
+        int bookedCount = booked.orElse(0);
+        int totalCount = availCount + bookedCount;
+
+        // No availability records for this date — rooms are open by default.
+        // Fall back to the actual room count for the hotel.
+        if (totalCount == 0) {
+            totalCount = roomRepository.findByHotelId(hotelId).size();
+            availCount = totalCount;
+        }
+
         AvailabilityCheckDTO dto = new AvailabilityCheckDTO();
         dto.setHotelId(hotelId);
         dto.setAvailabilityDate(date);
-        dto.setAvailableRooms(total.orElse(0));
-        dto.setBookedRooms(booked.orElse(0));
-        dto.setTotalRooms(total.orElse(0) + booked.orElse(0));
+        dto.setAvailableRooms(availCount);
+        dto.setBookedRooms(bookedCount);
+        dto.setTotalRooms(totalCount);
 
         if (dto.getTotalRooms() > 0) {
             dto.setOccupancyPercentage((double) dto.getBookedRooms() / dto.getTotalRooms() * 100);

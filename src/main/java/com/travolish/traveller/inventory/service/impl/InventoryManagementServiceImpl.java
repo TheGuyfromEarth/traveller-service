@@ -120,11 +120,17 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             .getHotelOccupancyForDateRange(hotelId, date, date.plusDays(1));
 
         Double occPct = occupancy.getOccupancyPercentage();
-        String status = "GOOD";
-        if (occPct != null && occPct > 85) {
+        String status;
+        if (occPct == null || occPct == 0.0) {
+            status = "VACANT";
+        } else if (occPct < 20) {
+            status = "LOW";
+        } else if (occPct > 85) {
             status = "CRITICAL";
-        } else if (occPct != null && occPct > 70) {
+        } else if (occPct > 70) {
             status = "WARNING";
+        } else {
+            status = "GOOD";
         }
 
         return InventoryDashboardDTO.builder()
@@ -149,7 +155,8 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             
             InventoryForecastDTO forecast = InventoryForecastDTO.builder()
                 .date(current)
-                .projectedOccupancy(occupancy.getBookedRooms())
+                .projectedOccupancy(occupancy.getOccupancyPercentage() != null
+                    ? (int) Math.round(occupancy.getOccupancyPercentage()) : 0)
                 .demandLevel(getDemandLevelLabel(occupancy.getOccupancyPercentage()))
                 .build();
 
@@ -218,15 +225,25 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
         }
 
         double avgOccupancy = availabilities.isEmpty() ? 0 : totalOccupancy / availabilities.size();
-        double cancellationRate = totalBookings == 0 ? 0 : (totalCancellations * 100.0 / totalBookings);
 
-        // Length-of-stay segment breakdown — bookings that checked in during the period
-        List<com.travolish.traveller.booking.model.Booking> periodBookings =
+        // Load all bookings in the period to compute cancellation rate and segment breakdown
+        List<com.travolish.traveller.booking.model.Booking> allPeriodBookings =
             bookingRepository.findByHotelId(hotelId).stream()
-                .filter(b -> b.getStatus() == com.travolish.traveller.booking.model.Booking.BookingStatus.CONFIRMED
-                          && !b.getCheckInDate().isBefore(startDate)
+                .filter(b -> !b.getCheckInDate().isBefore(startDate)
                           && !b.getCheckInDate().isAfter(endDate))
                 .collect(java.util.stream.Collectors.toList());
+
+        totalCancellations = (int) allPeriodBookings.stream()
+            .filter(b -> b.getStatus() == com.travolish.traveller.booking.model.Booking.BookingStatus.CANCELLED)
+            .count();
+
+        // Confirmed bookings only — used for length-of-stay segment breakdown
+        List<com.travolish.traveller.booking.model.Booking> periodBookings = allPeriodBookings.stream()
+            .filter(b -> b.getStatus() == com.travolish.traveller.booking.model.Booking.BookingStatus.CONFIRMED)
+            .collect(java.util.stream.Collectors.toList());
+
+        int periodReservations = periodBookings.size() + totalCancellations;
+        double cancellationRate = periodReservations == 0 ? 0 : (totalCancellations * 100.0 / periodReservations);
 
         List<OccupancyReportDTO.SegmentDTO> segments = new ArrayList<>();
         if (!periodBookings.isEmpty()) {
@@ -276,7 +293,8 @@ public class InventoryManagementServiceImpl implements InventoryManagementServic
             var occupancy = availabilityService.getHotelOccupancyOnDate(hotelId, current);
             var forecast = new InventoryForecastDTO();
             forecast.setDate(current);
-            forecast.setProjectedOccupancy(occupancy.getBookedRooms());          // rooms booked, not revenue
+            forecast.setProjectedOccupancy(occupancy.getOccupancyPercentage() != null
+                ? (int) Math.round(occupancy.getOccupancyPercentage()) : 0);
             forecast.setProjectedRevenue(dayRevenue);                             // daily revenue in correct field
             forecast.setDemandLevel(getDemandLevelLabel(occupancy.getOccupancyPercentage()));
             dailyForecasts.add(forecast);

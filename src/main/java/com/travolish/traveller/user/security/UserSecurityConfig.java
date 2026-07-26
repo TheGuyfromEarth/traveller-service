@@ -103,6 +103,7 @@ public class UserSecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/rooms/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/rooms/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/host/**").hasAnyRole("HOST", "ADMIN")
+                        .requestMatchers("/api/guest/**").hasAnyRole("GUEST", "HOST", "ADMIN")
                         .requestMatchers("/api/kyc/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/payouts/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/promotions/**").hasAnyRole("HOST", "ADMIN")

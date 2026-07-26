@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * Expires PENDING pricing suggestions whose suggestedToDate has passed.
@@ -22,8 +23,8 @@ public class PricingExpirationScheduler {
 
     @Scheduled(cron = "0 15 2 * * *")
     @Transactional
-    public void expireStalesuggestions() {
-        int count = pricingSuggestionRepository.expirePendingSuggestions(LocalDate.now());
+    public void expireStaleSuggestions() {
+        int count = pricingSuggestionRepository.expirePendingSuggestions(LocalDate.now(), LocalDateTime.now());
         if (count > 0) {
             log.info("Expired {} stale PENDING pricing suggestions", count);
         }

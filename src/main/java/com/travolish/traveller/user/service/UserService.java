@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
+import com.travolish.traveller.admin.audit.AuditLogService;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
 import com.travolish.traveller.notifications.entity.NotificationChannel;
 import com.travolish.traveller.notifications.entity.NotificationType;
@@ -30,6 +31,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public UserDTO createUser(UserDTO userDTO) {
@@ -109,16 +111,24 @@ public class UserService {
     public UserDTO updateUserStatus(Long id, String status) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+        String previousStatus = user.getStatus();
         user.setStatus(status);
-        return convertToDTO(userRepository.save(user));
+        UserDTO result = convertToDTO(userRepository.save(user));
+        auditLogService.log("USER", id, "USER_STATUS_UPDATED",
+                "Status changed from " + previousStatus + " to " + status);
+        return result;
     }
 
     @Transactional
     public UserDTO updateUserRole(Long id, String role) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+        String previousRole = user.getRole();
         user.setRole(role);
-        return convertToDTO(userRepository.save(user));
+        UserDTO result = convertToDTO(userRepository.save(user));
+        auditLogService.log("USER", id, "USER_ROLE_UPDATED",
+                "Role changed from " + previousRole + " to " + role);
+        return result;
     }
 
     @Transactional
@@ -126,6 +136,7 @@ public class UserService {
         if (!userRepository.existsById(id)) {
             throw new UserNotFoundException("User not found with id: " + id);
         }
+        auditLogService.log("USER", id, "USER_DELETED", "User account deleted");
         userRepository.deleteById(id);
     }
 

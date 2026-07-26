@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.travolish.traveller.admin.audit.AuditLogService;
 import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.model.HotelChangeRequest;
 import com.travolish.traveller.hotel.repository.HotelChangeRequestRepository;
@@ -18,10 +19,13 @@ public class HotelChangeRequestServiceImpl implements HotelChangeRequestService 
 
     private final HotelChangeRequestRepository requestRepository;
     private final HotelRepository hotelRepository;
+    private final AuditLogService auditLogService;
 
-    public HotelChangeRequestServiceImpl(HotelChangeRequestRepository requestRepository, HotelRepository hotelRepository) {
+    public HotelChangeRequestServiceImpl(HotelChangeRequestRepository requestRepository,
+                                         HotelRepository hotelRepository, AuditLogService auditLogService) {
         this.requestRepository = requestRepository;
         this.hotelRepository = hotelRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Override
@@ -87,7 +91,10 @@ public class HotelChangeRequestServiceImpl implements HotelChangeRequestService 
         req.setStatus(HotelChangeRequest.RequestStatus.APPROVED);
         req.setAdminComment(adminComment);
         req.setProcessedAt(OffsetDateTime.now());
-        return requestRepository.save(req);
+        HotelChangeRequest saved = requestRepository.save(req);
+        auditLogService.log("HOTEL_CHANGE_REQUEST", id, "CHANGE_REQUEST_APPROVED",
+                adminComment != null ? adminComment : "Approved");
+        return saved;
     }
 
     @Override
@@ -98,6 +105,9 @@ public class HotelChangeRequestServiceImpl implements HotelChangeRequestService 
         req.setStatus(HotelChangeRequest.RequestStatus.REJECTED);
         req.setAdminComment(adminComment);
         req.setProcessedAt(OffsetDateTime.now());
-        return requestRepository.save(req);
+        HotelChangeRequest saved = requestRepository.save(req);
+        auditLogService.log("HOTEL_CHANGE_REQUEST", id, "CHANGE_REQUEST_REJECTED",
+                adminComment != null ? adminComment : "Rejected");
+        return saved;
     }
 }

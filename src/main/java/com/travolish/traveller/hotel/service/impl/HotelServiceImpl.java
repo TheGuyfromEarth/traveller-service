@@ -3,6 +3,7 @@ package com.travolish.traveller.hotel.service.impl;
 import java.util.List;
 import java.util.Optional;
 
+import com.travolish.traveller.admin.audit.AuditLogService;
 import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
 import com.travolish.traveller.hotel.service.HotelService;
@@ -25,12 +26,14 @@ public class HotelServiceImpl implements HotelService {
     private final HotelRepository hotelRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     public HotelServiceImpl(HotelRepository hotelRepository, UserRepository userRepository,
-                            NotificationService notificationService) {
+                            NotificationService notificationService, AuditLogService auditLogService) {
         this.hotelRepository = hotelRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
     }
 
     @Override
@@ -281,6 +284,9 @@ public class HotelServiceImpl implements HotelService {
             }
             Hotel saved = hotelRepository.save(existing);
             sendStatusChangeNotification(saved, status, adminNote);
+            String details = "Status changed to " + status.name()
+                    + (adminNote != null && !adminNote.isBlank() ? ". Note: " + adminNote : "");
+            auditLogService.log("HOTEL", id, "HOTEL_STATUS_UPDATED", details);
             return saved;
         });
     }
