@@ -6,6 +6,7 @@ import java.util.List;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -58,12 +59,14 @@ public class Room {
     private Boolean privateBathroom = true;
 
     // §8 — Photos
+    @BatchSize(size = 30)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "room_photos", joinColumns = @JoinColumn(name = "room_id"))
     @Column(name = "photo_url")
     private List<String> photos = new ArrayList<>();
 
     // §23 — Room-level amenities
+    @BatchSize(size = 30)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "room_amenities", joinColumns = @JoinColumn(name = "room_id"))
     @Column(name = "amenity")

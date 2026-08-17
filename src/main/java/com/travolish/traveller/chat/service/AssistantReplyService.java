@@ -72,7 +72,11 @@ public class AssistantReplyService {
             String reply = callGemini(userText);
 
             Conversation conversation = conversationRepository.findById(conversationId).orElse(null);
-            if (conversation == null) return;
+            if (conversation == null) {
+                log.error("Conversation {} not found — AI reply for guest {} cannot be saved.",
+                          conversationId, guestUserId);
+                return;
+            }
 
             Message msg = new Message();
             msg.setConversation(conversation);
@@ -93,8 +97,29 @@ public class AssistantReplyService {
             conversationRepository.save(conversation);
 
         } catch (Exception e) {
-            log.warn("AI assistant reply failed for conversation {} ({}): {}",
-                     conversationId, e.getClass().getSimpleName(), e.getMessage());
+            log.error("Failed to generate/save AI reply for conversation {} ({}): {}",
+                      conversationId, e.getClass().getSimpleName(), e.getMessage());
+            // Attempt a single fallback save so the user receives some response even if
+            // the primary flow failed (e.g. a DB timeout after the Gemini call).
+            try {
+                Conversation conv = conversationRepository.findById(conversationId).orElse(null);
+                if (conv != null) {
+                    Message fallbackMsg = new Message();
+                    fallbackMsg.setConversation(conv);
+                    fallbackMsg.setSenderId(SUPPORT_USER_ID);
+                    fallbackMsg.setReceiverId(guestUserId);
+                    fallbackMsg.setMessageText(fallback(userText));
+                    fallbackMsg.setIsRead(false);
+                    fallbackMsg.setIsDeleted(false);
+                    messageRepository.save(fallbackMsg);
+                    conv.setLastMessageId(fallbackMsg.getId());
+                    conv.setLastMessageTime(LocalDateTime.now());
+                    conversationRepository.save(conv);
+                }
+            } catch (Exception retryEx) {
+                log.error("Fallback save also failed for conversation {}: {}",
+                          conversationId, retryEx.getMessage());
+            }
         }
     }
 

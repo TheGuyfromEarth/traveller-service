@@ -18,15 +18,18 @@ import com.travolish.traveller.hotel.dto.HotelSearchRequest;
 import com.travolish.traveller.hotel.dto.HotelSearchResponse;
 import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.hotel.repository.RoomRepository;
 import com.travolish.traveller.hotel.specification.HotelSpecification;
 
 @Service
 public class HotelSearchService {
 
     private final HotelRepository hotelRepository;
+    private final RoomRepository roomRepository;
 
-    public HotelSearchService(HotelRepository hotelRepository) {
+    public HotelSearchService(HotelRepository hotelRepository, RoomRepository roomRepository) {
         this.hotelRepository = hotelRepository;
+        this.roomRepository = roomRepository;
     }
 
     // HotelSearchRequest is a Lombok @Data class — equals/hashCode cover all fields,
@@ -42,16 +45,33 @@ public class HotelSearchService {
 
         List<Hotel> hotels = hotelPage.getContent();
         List<Long> ids = hotels.stream().map(Hotel::getId).collect(Collectors.toList());
-        Map<Long, Integer> reviewCounts = ids.isEmpty() ? Collections.emptyMap()
-                : hotelRepository.countReviewsByHotelIds(ids)
-                        .stream()
-                        .collect(Collectors.toMap(
-                                row -> ((Number) row[0]).longValue(),
-                                row -> ((Number) row[1]).intValue()
-                        ));
+
+        if (ids.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+        }
+
+        // Review counts — single batch query
+        Map<Long, Integer> reviewCounts = hotelRepository.countReviewsByHotelIds(ids)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> ((Number) row[1]).intValue()
+                ));
+
+        // Cheapest available room price per hotel — single GROUP BY query.
+        // This lets the frontend display prices on search cards without calling
+        // GET /api/rooms (which previously dumped the entire rooms table).
+        Map<Long, Double> priceMap = roomRepository.findCheapestPriceByHotelIds(ids)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> row[1] != null ? ((Number) row[1]).doubleValue() : null
+                ));
 
         List<HotelSearchResponse> responseList = hotels.stream()
-                .map(h -> mapToResponse(h, reviewCounts.getOrDefault(h.getId(), 0)))
+                .map(h -> mapToResponse(h,
+                        reviewCounts.getOrDefault(h.getId(), 0),
+                        priceMap.get(h.getId())))
                 .collect(Collectors.toList());
 
         return new PageImpl<>(responseList, pageable, hotelPage.getTotalElements());
@@ -69,7 +89,7 @@ public class HotelSearchService {
                         searchRequest.getLngMin(), searchRequest.getLngMax()));
     }
 
-    private HotelSearchResponse mapToResponse(Hotel hotel, int reviewCount) {
+    private HotelSearchResponse mapToResponse(Hotel hotel, int reviewCount, Double cheapestRoomPrice) {
         return HotelSearchResponse.builder()
                 .id(hotel.getId())
                 .name(hotel.getName())
@@ -83,6 +103,15 @@ public class HotelSearchService {
                 .description(hotel.getDescription())
                 .latitude(hotel.getLatitude())
                 .longitude(hotel.getLongitude())
+                .imageUrl(hotel.getImageUrl())
+                .videoUrl(hotel.getVideoUrl())
+                .amenities(hotel.getAmenities())
+                .maxGuests(hotel.getMaxGuests())
+                .instantBooking(hotel.getInstantBooking())
+                .minimumStay(hotel.getMinimumStay())
+                .checkInTime(hotel.getCheckInTime())
+                .checkOutTime(hotel.getCheckOutTime())
+                .cheapestRoomPrice(cheapestRoomPrice)
                 .createdAt(hotel.getCreatedAt())
                 .build();
     }

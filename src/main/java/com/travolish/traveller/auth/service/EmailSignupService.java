@@ -109,10 +109,19 @@ public class EmailSignupService {
         codeRepository.save(record);
 
         String role = record.getRequestedRole() != null ? record.getRequestedRole() : "GUEST";
+
+        // Support two name-entry modes coming from the frontend:
+        //   Nickname mode  → preferredName is set, firstName/lastName may be absent
+        //   Formal mode    → firstName + lastName are set, preferredName is absent
+        String firstName     = request.getFirstName() != null ? request.getFirstName().trim() : "";
+        String lastName      = request.getLastName()  != null ? request.getLastName().trim()  : "";
+        String preferredName = request.getPreferredName() != null ? request.getPreferredName().trim() : null;
+
         User user = User.builder()
                 .email(email)
-                .firstName(request.getFirstName() != null ? request.getFirstName() : "")
-                .lastName(request.getLastName() != null ? request.getLastName() : "")
+                .firstName(firstName)
+                .lastName(lastName)
+                .preferredName(preferredName)
                 .provider("email")
                 .role(role)
                 .status("ACTIVE")
@@ -123,10 +132,15 @@ public class EmailSignupService {
         String accessToken = jwtTokenProvider.generateToken(saved);
         String refreshToken = jwtTokenProvider.generateRefreshToken(saved);
 
+        // Derive the display name: prefer preferredName, fall back to firstName+lastName
+        String displayName = (preferredName != null && !preferredName.isEmpty())
+                ? preferredName
+                : (saved.getFirstName() + " " + saved.getLastName()).trim();
+
         return OAuth2AuthResponse.builder()
                 .userId(saved.getId())
                 .email(saved.getEmail())
-                .name((saved.getFirstName() + " " + saved.getLastName()).trim())
+                .name(displayName)
                 .provider("email")
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)

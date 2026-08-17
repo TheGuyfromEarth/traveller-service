@@ -21,7 +21,9 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -101,6 +103,15 @@ public class GuestReminderScheduler {
                 .findByHostIdInAndTriggerKeyword(hostIds, triggerKeyword).stream()
                 .collect(Collectors.toMap(AutoReplyTemplate::getHostId, t -> t, (a, b) -> a));
 
+        // Batch-fetch users for all bookings that have a userId — avoids N+1 (one findById per booking)
+        Set<Long> userIds = bookings.stream()
+            .map(Booking::getUserId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<Long, User> userMap = userIds.isEmpty() ? Map.of()
+            : userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
         int sent = 0;
         for (Booking b : bookings) {
             try {
@@ -126,9 +137,9 @@ public class GuestReminderScheduler {
 
                 String recipientEmail;
                 if (b.getUserId() != null) {
-                    recipientEmail = userRepository.findById(b.getUserId())
-                        .map(User::getEmail)
-                        .orElse(b.getGuestEmail());
+                    // Resolved from the pre-fetched map — no per-booking DB call
+                    User user = userMap.get(b.getUserId());
+                    recipientEmail = user != null ? user.getEmail() : b.getGuestEmail();
                 } else {
                     recipientEmail = b.getGuestEmail();
                 }

@@ -4,14 +4,17 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.repository.BookingRepository;
-import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
 import com.travolish.traveller.inventory.dto.OfferDTO;
 import com.travolish.traveller.inventory.dto.TravelCreditsDTO;
@@ -46,8 +49,9 @@ public class OffersService {
                       && !today.isAfter(r.getEndDate()))
             .collect(Collectors.toList());
 
+        Map<Long, String> hotelNameMap = batchFetchHotelNames(rules);
         return rules.stream()
-            .map(r -> mapToOffer(r, today))
+            .map(r -> mapToOffer(r, today, hotelNameMap))
             .collect(Collectors.toList());
     }
 
@@ -56,15 +60,32 @@ public class OffersService {
         if (code == null || code.isBlank()) return null;
         LocalDate today = LocalDate.now();
 
-        return pricingRuleRepository.findAll().stream()
+        List<PricingRule> allRules = pricingRuleRepository.findAll();
+        Map<Long, String> hotelNameMap = batchFetchHotelNames(allRules);
+
+        return allRules.stream()
             .filter(r -> r.getIsActive() && !today.isAfter(r.getEndDate()))
-            .filter(r -> {
-                String effective = effectiveCode(r);
-                return code.trim().equalsIgnoreCase(effective);
-            })
+            .filter(r -> code.trim().equalsIgnoreCase(effectiveCode(r)))
             .findFirst()
-            .map(r -> mapToOffer(r, today))
+            .map(r -> mapToOffer(r, today, hotelNameMap))
             .orElse(null);
+    }
+
+    /**
+     * Batch-fetch hotel names for all rules in a single IN-query, returning a
+     * map of hotelId → name. Replaces per-rule hotelRepository.findById() calls.
+     */
+    private Map<Long, String> batchFetchHotelNames(List<PricingRule> rules) {
+        Set<Long> hotelIds = rules.stream()
+            .map(PricingRule::getHotelId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (hotelIds.isEmpty()) return Collections.emptyMap();
+        return hotelRepository.findIdAndNameByIdIn(hotelIds).stream()
+            .collect(Collectors.toMap(
+                row -> (Long) row[0],
+                row -> (String) row[1]
+            ));
     }
 
     /** Compute travel credits for a user: 2% of all confirmed booking revenue. */
@@ -103,10 +124,9 @@ public class OffersService {
 
     // ─── helpers ──────────────────────────────────────────────────────────────
 
-    private OfferDTO mapToOffer(PricingRule rule, LocalDate today) {
+    private OfferDTO mapToOffer(PricingRule rule, LocalDate today, Map<Long, String> hotelNameMap) {
         String code = effectiveCode(rule);
-        String hotelName = hotelRepository.findById(rule.getHotelId())
-            .map(Hotel::getName).orElse(null);
+        String hotelName = rule.getHotelId() != null ? hotelNameMap.get(rule.getHotelId()) : null;
 
         String discountSummary = buildDiscountSummary(rule);
         Double discountPercent = null;

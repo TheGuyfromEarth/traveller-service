@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.travolish.traveller.hotel.model.Room;
 import com.travolish.traveller.hotel.service.RoomService;
@@ -20,9 +21,20 @@ public class RoomController {
         this.roomService = roomService;
     }
 
+    /**
+     * List rooms for a specific hotel.
+     *
+     * <p>{@code hotelId} is required. Fetching all rooms across every hotel in a single
+     * request is prohibited — it dumps the full rooms table and causes severe performance
+     * degradation on the search and home pages that previously called this without a filter.
+     * Use GET /api/hotels/search for search (price is now included in the search response).
+     */
     @GetMapping
-    public List<Room> list(@RequestParam(value = "hotelId", required = false) Long hotelId) {
-        if (hotelId == null) return roomService.findAll();
+    public List<Room> list(@RequestParam(value = "hotelId") Long hotelId) {
+        if (hotelId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "hotelId is required. Use GET /api/hotels/search for paginated hotel search.");
+        }
         return roomService.findByHotelId(hotelId);
     }
 

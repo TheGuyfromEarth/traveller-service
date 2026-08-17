@@ -18,7 +18,8 @@ public enum NotificationType {
     EMAIL_VERIFICATION("Email Verification"),
     ACCOUNT_ALERT("Account Alert"),
     MAINTENANCE_NOTICE("Maintenance Notice"),
-    GENERAL_ANNOUNCEMENT("General Announcement");
+    GENERAL_ANNOUNCEMENT("General Announcement"),
+    LISTING_SUBMITTED_FOR_REVIEW("Listing Submitted for Review");
     
     private final String description;
     

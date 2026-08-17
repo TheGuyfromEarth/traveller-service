@@ -15,6 +15,11 @@ import lombok.*;
     @Index(name = "idx_bookings_status",        columnList = "status"),
     @Index(name = "idx_bookings_check_in",      columnList = "checkInDate"),
     @Index(name = "idx_bookings_check_out",     columnList = "checkOutDate"),
+    // Composite index: covers the availability conflict query
+    // (roomId + status + checkInDate + checkOutDate) as a single index seek
+    @Index(name = "idx_bookings_avail",         columnList = "roomId,status,checkInDate,checkOutDate"),
+    // Composite index: covers findByUserIdOrderByCreatedAtDesc without a sort step
+    @Index(name = "idx_bookings_user_created",  columnList = "userId,createdAt"),
 })
 @Data
 @NoArgsConstructor

@@ -3,6 +3,7 @@ package com.travolish.traveller.user.controller;
 import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
+import java.util.Map;
 
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
@@ -39,12 +40,16 @@ public class ImageController {
 
         String key = String.format("users/%d/profile-%d%s", id, System.currentTimeMillis(), ext);
 
-        r2StorageService.upload(key, file.getInputStream(), file.getContentType());
+        // upload() returns the full public CDN URL — store that, not the bare key,
+        // so the avatar URL is immediately usable by the frontend as an <img> src.
+        String publicUrl = r2StorageService.upload(key, file.getInputStream(), file.getContentType());
 
-        user.setImageKey(key);
+        user.setImageKey(publicUrl);
         userRepository.save(user);
 
-        return new ResponseEntity<>(HttpStatus.CREATED);
+        // Return the URL so the frontend can update the avatar preview immediately
+        // without a separate GET /api/users/{id} round-trip.
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("avatarUrl", publicUrl));
     }
 
     @GetMapping("/{id}/image")

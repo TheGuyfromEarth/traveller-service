@@ -3,6 +3,7 @@ package com.travolish.traveller.payment.service;
 import com.travolish.traveller.payment.dto.*;
 import com.travolish.traveller.payment.entity.*;
 import com.travolish.traveller.payment.repository.*;
+import com.travolish.traveller.booking.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -15,8 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.json.JSONObject;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,6 +33,7 @@ public class PaymentService {
     private final RefundRepository refundRepository;
     private final ReceiptRepository receiptRepository;
     private final RazorpayIntegrationService razorpayService;
+    private final BookingRepository bookingRepository;
     private final ModelMapper modelMapper;
     
     @Value("${razorpay.api.key:rzp_test_placeholder}")
@@ -361,9 +365,22 @@ public class PaymentService {
         if (request.getAmount().compareTo(BigDecimal.ONE) < 0) {
             throw new IllegalArgumentException("Minimum payment amount is 1.00");
         }
-        
+
         if (request.getAmount().compareTo(new BigDecimal(10000000)) > 0) {
             throw new IllegalArgumentException("Maximum payment amount is 10,000,000");
+        }
+
+        // Verify the booking exists and belongs to the authenticated user
+        if (request.getBookingId() != null) {
+            bookingRepository.findById(request.getBookingId()).ifPresentOrElse(
+                booking -> {
+                    if (booking.getUserId() == null || !booking.getUserId().equals(userId)) {
+                        throw new IllegalStateException(
+                            "Booking #" + request.getBookingId() + " does not belong to the authenticated user");
+                    }
+                },
+                () -> { throw new IllegalArgumentException("Booking not found: " + request.getBookingId()); }
+            );
         }
     }
     
@@ -397,6 +414,94 @@ public class PaymentService {
         }
     }
 
+    // ─── Booking-payment coordination helpers ────────────────────────────────
+
+    /**
+     * Returns {@code true} if a {@code COMPLETED} payment exists for the given booking.
+     * Used by {@code BookingController.confirmBooking()} to warn when no payment is on
+     * record before transitioning to {@code CONFIRMED}.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasCompletedPayment(Long bookingId) {
+        return paymentRepository
+            .findTopByBookingIdAndPaymentStatusOrderByCompletedAtDesc(bookingId, PaymentStatus.COMPLETED)
+            .isPresent();
+    }
+
+    /**
+     * Processes a refund when a booking is cancelled.
+     *
+     * <p>Looks up the most recent {@code COMPLETED} payment for the booking, calculates
+     * the eligible refund amount according to the standard cancellation policy, and
+     * initiates the refund through Razorpay. If no completed payment exists (e.g. a
+     * pay-at-property booking) this is a no-op.
+     *
+     * <p>Cancellation policy:
+     * <ul>
+     *   <li>&gt; 7 days until check-in → full refund</li>
+     *   <li>2–7 days until check-in → 50 % refund</li>
+     *   <li>&lt; 2 days until check-in → non-refundable</li>
+     * </ul>
+     *
+     * <p>Refund failures are logged but not re-thrown — the booking is already
+     * cancelled at this point and manual follow-up can use the payment ID from logs.
+     */
+    @Transactional
+    public void processRefundForBookingCancellation(Long bookingId, LocalDate checkInDate) {
+        log.info("Evaluating refund for cancelled booking: {}", bookingId);
+
+        Optional<Payment> paymentOpt = paymentRepository
+            .findTopByBookingIdAndPaymentStatusOrderByCompletedAtDesc(bookingId, PaymentStatus.COMPLETED);
+
+        if (paymentOpt.isEmpty()) {
+            log.info("No completed payment found for booking {} — no refund to issue", bookingId);
+            return;
+        }
+
+        Payment payment = paymentOpt.get();
+        BigDecimal refundAmount = calculateCancellationRefundAmount(payment.getTotalAmount(), checkInDate);
+
+        if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            log.info("Cancellation policy yields zero refund for booking {} (check-in: {}) — skipping",
+                    bookingId, checkInDate);
+            return;
+        }
+
+        log.info("Issuing refund of {} for cancelled booking {} (payment id: {})",
+                refundAmount, bookingId, payment.getId());
+
+        RefundRequest refundReq = new RefundRequest();
+        refundReq.setPaymentId(payment.getId());
+        refundReq.setRefundAmount(refundAmount);
+        refundReq.setReason("Booking #" + bookingId + " cancelled");
+
+        try {
+            processRefund(payment.getUserId(), refundReq);
+        } catch (Exception e) {
+            // Log for manual follow-up; do not re-throw — cancellation already persisted
+            log.error("Refund failed for cancelled booking {} (payment {}): {}",
+                    bookingId, payment.getId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Determines the refund amount for a cancellation based on how far out the
+     * check-in date is. Mirrors the policy shown to guests on the TripDetailPage.
+     */
+    private BigDecimal calculateCancellationRefundAmount(BigDecimal totalAmount, LocalDate checkInDate) {
+        if (checkInDate == null) {
+            return totalAmount; // Unknown check-in — default to full refund
+        }
+        long daysUntilCheckIn = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), checkInDate);
+        if (daysUntilCheckIn > 7) {
+            return totalAmount;                                          // Full refund
+        } else if (daysUntilCheckIn > 2) {
+            return totalAmount.multiply(new BigDecimal("0.50"));        // 50 % refund
+        } else {
+            return BigDecimal.ZERO;                                      // Non-refundable
+        }
+    }
+
     // ─── Razorpay gateway helpers ────────────────────────────────────────────
 
     /** Returns the public Razorpay key ID for the frontend checkout widget. */
@@ -421,6 +526,18 @@ public class PaymentService {
      */
     public void handleRazorpayWebhook(String payload, String signature) {
         log.info("Processing Razorpay webhook, payload size: {}", payload.length());
+
+        // Reject immediately if the signature is missing or does not match.
+        // An invalid signature means the request did not originate from Razorpay.
+        if (signature == null || signature.isBlank()) {
+            log.warn("Razorpay webhook received without X-Razorpay-Signature header — rejecting");
+            throw new IllegalArgumentException("Missing Razorpay webhook signature");
+        }
+        if (!razorpayService.verifyWebhookSignature(payload, signature)) {
+            log.warn("Razorpay webhook signature verification failed — rejecting");
+            throw new IllegalArgumentException("Invalid Razorpay webhook signature");
+        }
+
         try {
             JSONObject event = new JSONObject(payload);
             String eventType = event.optString("event");

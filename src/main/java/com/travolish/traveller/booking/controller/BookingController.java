@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.web.server.ResponseStatusException;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -23,21 +25,27 @@ import com.travolish.traveller.booking.dto.BookingPriceDTO;
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.service.BookingService;
 import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.payment.service.PaymentService;
+import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @RequestMapping("/api/bookings")
+@Slf4j
 public class BookingController {
 
     private final BookingService bookingService;
     private final com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler;
     private final HotelRepository hotelRepository;
+    private final PaymentService paymentService;
 
     public BookingController(BookingService bookingService,
                              com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler,
-                             HotelRepository hotelRepository) {
+                             HotelRepository hotelRepository,
+                             PaymentService paymentService) {
         this.bookingService = bookingService;
         this.bookingStatusScheduler = bookingStatusScheduler;
         this.hotelRepository = hotelRepository;
+        this.paymentService = paymentService;
     }
 
     /**
@@ -107,6 +115,14 @@ public class BookingController {
                 updated > 0 ? updated + " booking(s) marked COMPLETED" : "All statuses up to date"));
     }
 
+    /**
+     * List bookings scoped to a specific user or guest e-mail.
+     *
+     * <p>At least one of {@code userId} or {@code guestEmail} is required.
+     * Fetching all bookings with no filter is prohibited here — it dumps the entire
+     * bookings table. Admin access to all bookings is available via the paginated
+     * {@code GET /api/bookings/admin} endpoint.
+     */
     @GetMapping
     public List<Booking> list(
             @RequestParam(required = false) Long userId,
@@ -117,7 +133,9 @@ public class BookingController {
         if (guestEmail != null && !guestEmail.isBlank()) {
             return bookingService.findByGuestEmail(guestEmail);
         }
-        return bookingService.findAll();
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Either userId or guestEmail is required. " +
+                "For admin access to all bookings use GET /api/bookings/admin (paginated).");
     }
 
     @GetMapping("/{id}")
@@ -207,23 +225,48 @@ public class BookingController {
     }
 
     /**
-     * Cancel a booking by ID
-     * POST /api/bookings/1/cancel
+     * Cancel a booking by ID and trigger a payment refund where applicable.
+     * POST /api/bookings/{id}/cancel
+     *
+     * <p>The refund amount follows the standard cancellation policy:
+     * &gt; 7 days before check-in → full refund, 2–7 days → 50 %, &lt; 2 days → none.
+     * If no completed payment exists (pay-at-property bookings) the refund step is
+     * skipped silently. Refund failures are logged but do not roll back the cancellation.
      */
     @PostMapping("/{id}/cancel")
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
-        boolean found = bookingService.cancelBooking(id);
-        return found ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+        // Read the booking first so we have checkInDate for the refund-policy calculation
+        return bookingService.findById(id)
+                .map(booking -> {
+                    bookingService.cancelBooking(id);
+                    // Initiate refund if a completed payment exists for this booking
+                    try {
+                        paymentService.processRefundForBookingCancellation(id, booking.getCheckInDate());
+                    } catch (Exception e) {
+                        // Log but don't surface to the caller — booking is already cancelled
+                        log.error("Refund trigger failed for cancelled booking {}: {}", id, e.getMessage(), e);
+                    }
+                    return ResponseEntity.<Void>noContent().build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**
      * Confirm a PENDING booking (admin action).
-     * POST /api/bookings/1/confirm
+     * POST /api/bookings/{id}/confirm
+     *
+     * <p>Logs a warning if no completed payment exists before confirming, to catch
+     * cases where a booking is confirmed without payment being captured. Admins may
+     * still confirm for cash / in-person / voucher bookings.
      */
     @PostMapping("/{id}/confirm")
     public ResponseEntity<Booking> confirmBooking(@PathVariable Long id) {
         return bookingService.findById(id)
                 .map(b -> {
+                    if (!paymentService.hasCompletedPayment(id)) {
+                        log.warn("Confirming booking {} with no completed payment on record — " +
+                                 "acceptable for in-person/voucher bookings, verify intent", id);
+                    }
                     b.setStatus(Booking.BookingStatus.CONFIRMED);
                     return bookingService.update(id, b).orElse(b);
                 })

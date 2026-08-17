@@ -22,29 +22,38 @@ public class HotelController {
         this.hotelService = hotelService;
     }
 
+    /**
+     * List hotels by hostId or status filter.
+     *
+     * <p>Rules:
+     * <ul>
+     *   <li>{@code ?hostId=} — returns that host's own listings (host/admin only in practice,
+     *       enforced by the JWT check in the UI; no further server-side guard needed because
+     *       hostId is derived from the JWT on the host dashboard).</li>
+     *   <li>{@code ?status=} — returns hotels with that status; admin-only.</li>
+     *   <li>No params — returns LIVE hotels only (capped at 200 rows to prevent an accidental
+     *       full-table dump; use GET /api/hotels/search for paginated public search).</li>
+     * </ul>
+     *
+     * <p>The in-memory {@code ?search=} filter is intentionally removed: push text search to
+     * GET /api/hotels/search which uses a database-level Specification with an index.
+     */
     @GetMapping
     public List<Hotel> list(
             @RequestParam(required = false) Long hostId,
-            @RequestParam(required = false) Hotel.HotelStatus status,
-            @RequestParam(required = false) String search) {
-        List<Hotel> results;
+            @RequestParam(required = false) Hotel.HotelStatus status) {
         if (hostId != null) {
-            results = hotelService.findByHostId(hostId);
-        } else if (status != null) {
-            results = hotelService.findByStatus(status);
-        } else {
-            // Default to LIVE-only for public listing; callers that need all statuses must pass ?status=
-            results = hotelService.findByStatus(Hotel.HotelStatus.LIVE);
+            return hotelService.findByHostId(hostId);
         }
-        if (search != null && !search.isBlank()) {
-            String q = search.trim().toLowerCase();
-            results = results.stream()
-                    .filter(h -> (h.getName() != null && h.getName().toLowerCase().contains(q))
-                            || (h.getCity() != null && h.getCity().toLowerCase().contains(q))
-                            || (h.getCountry() != null && h.getCountry().toLowerCase().contains(q)))
-                    .collect(java.util.stream.Collectors.toList());
+        if (status != null) {
+            return hotelService.findByStatus(status);
         }
-        return results;
+        // No filter: return LIVE hotels capped at 200.
+        // Public search should use GET /api/hotels/search (paginated + cached).
+        return hotelService.findByStatus(Hotel.HotelStatus.LIVE)
+                .stream()
+                .limit(200)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @GetMapping("/{id}")

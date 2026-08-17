@@ -6,6 +6,7 @@ import com.travolish.traveller.payout.repository.PayoutRepository;
 import com.travolish.traveller.booking.repository.BookingRepository;
 import com.travolish.traveller.hotel.model.Hotel;
 import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.payment.service.RazorpayIntegrationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
@@ -28,6 +29,7 @@ public class PayoutService {
     private final PayoutRepository payoutRepository;
     private final HotelRepository hotelRepository;
     private final BookingRepository bookingRepository;
+    private final RazorpayIntegrationService razorpayIntegrationService;
     private final ModelMapper modelMapper;
     
     // Configuration constants
@@ -183,11 +185,35 @@ public class PayoutService {
         payout.setUpdatedAt(LocalDateTime.now());
         
         payout = payoutRepository.save(payout);
-        
-        // TODO: Integrate with payment gateway (Stripe, Razorpay, etc.)
-        // This would make the actual payout transfer
-        
-        log.info("Payout marked as processing: {}", payoutId);
+
+        // Attempt the actual bank transfer via Razorpay Payouts API.
+        // When Razorpay X is configured this completes immediately; until then
+        // initiatePayoutTransfer() throws UnsupportedOperationException and the
+        // payout remains in PROCESSING for manual settlement.
+        try {
+            String txRef = razorpayIntegrationService.initiatePayoutTransfer(
+                payout.getBankAccountId() != null ? payout.getBankAccountId().toString() : null,
+                payout.getNetAmount(),
+                "INR",
+                "Host payout #" + payoutId
+            );
+            payout.setTransactionReference(txRef);
+            payout.setPayoutStatus("COMPLETED");
+            payout.setCompletedDate(LocalDateTime.now());
+            payout.setActualCompletionDate(LocalDate.now());
+            payout = payoutRepository.save(payout);
+            log.info("Payout {} completed via gateway, tx ref: {}", payoutId, txRef);
+        } catch (UnsupportedOperationException e) {
+            log.warn("Payout gateway not yet configured — payout {} remains in PROCESSING for manual settlement",
+                    payoutId);
+        } catch (Exception e) {
+            payout.setPayoutStatus("FAILED");
+            payout.setFailureReason("Gateway error: " + e.getMessage());
+            payout = payoutRepository.save(payout);
+            log.error("Payout {} gateway transfer failed: {}", payoutId, e.getMessage(), e);
+        }
+
+        log.info("Payout {} processed (status: {})", payoutId, payout.getPayoutStatus());
         return modelMapper.map(payout, PayoutDTO.class);
     }
     
@@ -325,13 +351,35 @@ public class PayoutService {
             if (payout.getRetryCount() < MAX_RETRY_ATTEMPTS) {
                 log.info("Retrying payout: {} (attempt: {})", payout.getId(), payout.getRetryCount() + 1);
                 
-                // Reset to APPROVED for retry
-                payout.setPayoutStatus("APPROVED");
                 payout.setLastRetryDate(LocalDateTime.now());
                 payout.setUpdatedAt(LocalDateTime.now());
-                payoutRepository.save(payout);
-                
-                // TODO: Call payment gateway again
+
+                // Attempt the gateway transfer directly on retry
+                try {
+                    String txRef = razorpayIntegrationService.initiatePayoutTransfer(
+                        payout.getBankAccountId() != null ? payout.getBankAccountId().toString() : null,
+                        payout.getNetAmount(),
+                        "INR",
+                        "Host payout retry #" + payout.getId()
+                    );
+                    payout.setTransactionReference(txRef);
+                    payout.setPayoutStatus("COMPLETED");
+                    payout.setCompletedDate(LocalDateTime.now());
+                    payout.setActualCompletionDate(LocalDate.now());
+                    payout.setRetryCount(0);
+                    payoutRepository.save(payout);
+                    log.info("Payout {} completed on retry, tx ref: {}", payout.getId(), txRef);
+                } catch (UnsupportedOperationException e) {
+                    // Gateway not configured — reset to APPROVED so the payout can be
+                    // picked up again once Razorpay X is set up
+                    payout.setPayoutStatus("APPROVED");
+                    payoutRepository.save(payout);
+                    log.warn("Payout gateway not configured; payout {} reset to APPROVED", payout.getId());
+                } catch (Exception e) {
+                    // Keep as FAILED; retry counter was already incremented above
+                    payoutRepository.save(payout);
+                    log.error("Payout {} retry gateway call failed: {}", payout.getId(), e.getMessage(), e);
+                }
             } else {
                 log.warn("Payout {} exceeded max retry attempts", payout.getId());
             }

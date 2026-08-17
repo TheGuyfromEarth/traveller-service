@@ -81,6 +81,9 @@ dependencies {
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor:3.5.7'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	// Gradle
+	implementation 'me.paulschwarz:spring-dotenv:4.0.0'
 }
 
 tasks.named('test') {

@@ -17,10 +17,17 @@ public class RazorpayIntegrationService {
     
     @Value("${razorpay.api.key:dummy_key_1234567890}")
     private String razorpayApiKey;
-    
+
     @Value("${razorpay.api.secret:dummy_secret_1234567890}")
     private String razorpayApiSecret;
-    
+
+    /**
+     * Webhook secret configured in the Razorpay dashboard under
+     * Settings → Webhooks → Secret. Distinct from the API key/secret pair.
+     */
+    @Value("${razorpay.webhook.secret:dummy_webhook_secret}")
+    private String razorpayWebhookSecret;
+
     private RazorpayClient razorpayClient;
     
     /**
@@ -151,6 +158,49 @@ public class RazorpayIntegrationService {
         }
     }
     
+    /**
+     * Verifies the HMAC-SHA256 signature Razorpay attaches to every webhook POST.
+     * The signature is computed over the raw request body using the webhook secret
+     * configured in the Razorpay dashboard (Settings → Webhooks → Secret), which is
+     * separate from the API key/secret pair used for regular API calls.
+     *
+     * <p>Reject any webhook where this returns false — an invalid signature means the
+     * request did not originate from Razorpay and should not be processed.
+     */
+    public boolean verifyWebhookSignature(String payload, String receivedSignature) {
+        try {
+            return com.razorpay.Utils.verifyWebhookSignature(payload, receivedSignature, razorpayWebhookSecret);
+        } catch (Exception e) {
+            log.error("Error verifying Razorpay webhook signature: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Initiates a host payout via the Razorpay Payouts API (Razorpay X / Current Account).
+     *
+     * <p>Requires a Razorpay X current account and a pre-created fund account for the
+     * host's bank details. Once Razorpay X is configured, replace the body of this
+     * method with a real {@code razorpayClient.payouts.create(request)} call.
+     *
+     * @param fundAccountId  Razorpay fund_account_id for the host's bank account
+     * @param amount         Net amount to transfer (in INR)
+     * @param currency       Currency code (e.g. "INR")
+     * @param purpose        Human-readable description stored on the payout
+     * @return               Razorpay payout ID (e.g. "pout_Abcd1234")
+     * @throws UnsupportedOperationException until Razorpay X is configured
+     */
+    public String initiatePayoutTransfer(String fundAccountId, java.math.BigDecimal amount,
+                                         String currency, String purpose) {
+        // TODO(payout): Replace with razorpayClient.payouts.create(request) once
+        //   Razorpay X / Current Account is set up and RAZORPAY_X_KEY / RAZORPAY_X_SECRET
+        //   are provisioned. See https://razorpay.com/docs/razorpayx/api/payouts/
+        log.warn("Razorpay payout transfer not yet configured — fund_account={}, amount={} {}",
+                fundAccountId, amount, currency);
+        throw new UnsupportedOperationException(
+                "Payout gateway not configured. Set up Razorpay X and implement initiatePayoutTransfer().");
+    }
+
     /**
      * Create Razorpay customer for recurring payments
      */

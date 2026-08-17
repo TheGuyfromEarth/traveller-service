@@ -6,7 +6,7 @@ import com.travolish.traveller.emergency.dto.EmergencyContactDTO;
 import com.travolish.traveller.emergency.entity.EmergencySOS;
 import com.travolish.traveller.emergency.entity.EmergencyContact;
 import com.travolish.traveller.emergency.repository.EmergencySOSRepository;
-import com.travolish.traveller.emergency.repository.EmergencyContactRepository;
+import com.travolish.traveller.emergency.repository.EmergencyServiceRepository;
 import com.travolish.traveller.emergency.service.EmergencySOSService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 public class EmergencySOSServiceImpl implements EmergencySOSService {
 
     private final EmergencySOSRepository emergencySOSRepository;
-    private final EmergencyContactRepository emergencyContactRepository;
+    private final EmergencyServiceRepository emergencyContactRepository;
 
     @Override
     public EmergencySOSDTO activateSOS(ActivateSOSRequest request) {

@@ -25,7 +25,7 @@ public class EmailService {
     @Value("${spring.mail.from:noreply@travolish.com}")
     private String fromEmail;
 
-    @Value("${spring.mail.from-name:Travolish Hotels}")
+    @Value("${spring.mail.from-name:Travolish}")
     private String fromName;
 
     @Autowired(required = false)

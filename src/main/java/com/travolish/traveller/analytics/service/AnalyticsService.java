@@ -108,10 +108,12 @@ public class AnalyticsService {
             overview.setCancellationRate(latest.getCancellationRate());
         }
 
-        // ── Trend data — pass hotelIds to avoid 3 extra hotelRepository lookups ─
-        overview.setBookingsTrend(generateBookingsTrend(hostId, hotelIds, thirtyDaysAgo, today));
-        overview.setRevenueTrend(generateRevenueTrend(hostId, hotelIds, thirtyDaysAgo, today));
-        overview.setOccupancyTrend(generateOccupancyTrend(hostId, hotelIds, thirtyDaysAgo, today));
+        // ── Trend data — pass allBookings so helpers don't re-query the DB ──────
+        // allBookings was fetched above via a single IN-query; passing it here
+        // prevents three additional bookingRepository.findByHotelIdIn() calls.
+        overview.setBookingsTrend(generateBookingsTrend(hostId, hotelIds, allBookings, thirtyDaysAgo, today));
+        overview.setRevenueTrend(generateRevenueTrend(hostId, hotelIds, allBookings, thirtyDaysAgo, today));
+        overview.setOccupancyTrend(generateOccupancyTrend(hostId, hotelIds, allBookings, thirtyDaysAgo, today));
 
         return overview;
     }
@@ -376,11 +378,12 @@ public class AnalyticsService {
     // ========== Helper Methods ==========
     
     /**
-     * Bookings trend: count of check-ins per day from live booking data.
-     * Falls back to pre-computed HostAnalytics when available.
-     * hotelIds are pre-resolved by the caller to avoid a redundant DB lookup.
+     * Bookings trend: count of check-ins per day.
+     * Uses pre-computed HostAnalytics when available; falls back to the allBookings
+     * list already fetched by the caller — no additional DB query is made.
      */
-    private List<DailyMetricDTO> generateBookingsTrend(Long hostId, List<Long> hotelIds, LocalDate start, LocalDate end) {
+    private List<DailyMetricDTO> generateBookingsTrend(Long hostId, List<Long> hotelIds,
+            List<Booking> allBookings, LocalDate start, LocalDate end) {
         List<HostAnalytics> cached = hostAnalyticsRepository.findByHostIdAndDateRange(hostId, start, end);
         if (!cached.isEmpty()) {
             return cached.stream()
@@ -390,11 +393,9 @@ public class AnalyticsService {
         }
 
         Map<LocalDate, Long> daily = new TreeMap<>();
-        if (!hotelIds.isEmpty()) {
-            bookingRepository.findByHotelIdIn(hotelIds).stream()
-                .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
-                .forEach(b -> daily.merge(b.getCheckInDate(), 1L, Long::sum));
-        }
+        allBookings.stream()
+            .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
+            .forEach(b -> daily.merge(b.getCheckInDate(), 1L, Long::sum));
 
         return daily.entrySet().stream()
             .map(e -> new DailyMetricDTO(e.getKey(), BigDecimal.valueOf(e.getValue()), "bookings"))
@@ -402,17 +403,20 @@ public class AnalyticsService {
     }
 
     /**
-     * Revenue trend: sum of totalPrice per check-in day from live confirmed bookings.
-     * hotelIds are pre-resolved by the caller to avoid a redundant DB lookup.
+     * Revenue trend: sum of totalPrice per check-in day from confirmed bookings.
+     * Uses pre-computed HostEarnings when available; falls back to the allBookings
+     * list already fetched by the caller — no additional DB query is made.
      */
-    private List<DailyMetricDTO> generateRevenueTrend(Long hostId, List<Long> hotelIds, LocalDate start, LocalDate end) {
+    private List<DailyMetricDTO> generateRevenueTrend(Long hostId, List<Long> hotelIds,
+            List<Booking> allBookings, LocalDate start, LocalDate end) {
         // First try pre-computed earnings table
         List<HostEarnings> earnings = hostEarningsRepository.findByHostIdAndDateRange(hostId, start, end);
         if (!earnings.isEmpty()) {
             Map<LocalDate, BigDecimal> fromEarnings = new TreeMap<>();
             for (HostEarnings e : earnings) {
                 LocalDate date = e.getCheckInDate();
-                if (date != null) fromEarnings.merge(date, e.getNetEarnings() != null ? e.getNetEarnings() : BigDecimal.ZERO, BigDecimal::add);
+                if (date != null) fromEarnings.merge(date,
+                        e.getNetEarnings() != null ? e.getNetEarnings() : BigDecimal.ZERO, BigDecimal::add);
             }
             if (!fromEarnings.isEmpty()) {
                 return fromEarnings.entrySet().stream()
@@ -422,13 +426,11 @@ public class AnalyticsService {
         }
 
         Map<LocalDate, BigDecimal> daily = new TreeMap<>();
-        if (!hotelIds.isEmpty()) {
-            bookingRepository.findByHotelIdIn(hotelIds).stream()
-                .filter(b -> b.getStatus() != Booking.BookingStatus.CANCELLED)
-                .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
-                .forEach(b -> daily.merge(b.getCheckInDate(),
-                    BigDecimal.valueOf(b.getTotalPrice() != null ? b.getTotalPrice() : 0.0), BigDecimal::add));
-        }
+        allBookings.stream()
+            .filter(b -> b.getStatus() != Booking.BookingStatus.CANCELLED)
+            .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
+            .forEach(b -> daily.merge(b.getCheckInDate(),
+                BigDecimal.valueOf(b.getTotalPrice() != null ? b.getTotalPrice() : 0.0), BigDecimal::add));
 
         return daily.entrySet().stream()
             .map(e -> new DailyMetricDTO(e.getKey(), e.getValue(), "revenue"))
@@ -436,10 +438,12 @@ public class AnalyticsService {
     }
 
     /**
-     * Occupancy trend: average occupancy % per day from availability records.
-     * hotelIds are pre-resolved by the caller to avoid a redundant DB lookup.
+     * Occupancy trend: average occupancy % per day.
+     * Uses pre-computed HostAnalytics when available; falls back to the allBookings
+     * list already fetched by the caller — no additional DB query is made.
      */
-    private List<DailyMetricDTO> generateOccupancyTrend(Long hostId, List<Long> hotelIds, LocalDate start, LocalDate end) {
+    private List<DailyMetricDTO> generateOccupancyTrend(Long hostId, List<Long> hotelIds,
+            List<Booking> allBookings, LocalDate start, LocalDate end) {
         List<HostAnalytics> cached = hostAnalyticsRepository.findByHostIdAndDateRange(hostId, start, end);
         if (!cached.isEmpty()) {
             return cached.stream()
@@ -449,13 +453,11 @@ public class AnalyticsService {
         }
 
         Map<LocalDate, Long> bookingsPerDay = new TreeMap<>();
-        if (!hotelIds.isEmpty()) {
-            bookingRepository.findByHotelIdIn(hotelIds).stream()
-                .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED
-                          || b.getStatus() == Booking.BookingStatus.COMPLETED)
-                .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
-                .forEach(b -> bookingsPerDay.merge(b.getCheckInDate(), 1L, Long::sum));
-        }
+        allBookings.stream()
+            .filter(b -> b.getStatus() == Booking.BookingStatus.CONFIRMED
+                      || b.getStatus() == Booking.BookingStatus.COMPLETED)
+            .filter(b -> !b.getCheckInDate().isBefore(start) && !b.getCheckInDate().isAfter(end))
+            .forEach(b -> bookingsPerDay.merge(b.getCheckInDate(), 1L, Long::sum));
 
         long denominator = Math.max(1, hotelIds.size());
 

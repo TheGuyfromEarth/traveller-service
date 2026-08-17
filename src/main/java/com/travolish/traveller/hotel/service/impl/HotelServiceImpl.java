@@ -75,7 +75,7 @@ public class HotelServiceImpl implements HotelService {
                 // Notify the host that their listing is live
                 try {
                     SendNotificationRequest req = new SendNotificationRequest();
-                    req.setType(NotificationType.BOOKING_CONFIRMATION); // reuse as generic notification
+                    req.setType(NotificationType.LISTING_SUBMITTED_FOR_REVIEW);
                     req.setChannel(NotificationChannel.EMAIL);
                     req.setUserId(host.getId());
                     req.setRecipientEmail(host.getEmail());
@@ -350,7 +350,7 @@ public class HotelServiceImpl implements HotelService {
             }
             try {
                 SendNotificationRequest req = new SendNotificationRequest();
-                req.setType(NotificationType.BOOKING_CONFIRMATION);
+                req.setType(NotificationType.LISTING_SUBMITTED_FOR_REVIEW);
                 req.setChannel(NotificationChannel.EMAIL);
                 req.setUserId(host.getId());
                 req.setRecipientEmail(host.getEmail());

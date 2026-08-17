@@ -17,7 +17,11 @@ public class EmailSignupVerifyRequest {
     @NotBlank(message = "Verification code is required")
     private String code;
 
-    // Optional profile fields collected alongside the code
+    // Optional profile fields collected alongside the code.
+    // Exactly one name style should be provided:
+    //   Nickname mode  → preferredName only (firstName/lastName omitted)
+    //   Formal mode    → firstName + lastName (preferredName omitted)
     private String firstName;
     private String lastName;
+    private String preferredName;
 }

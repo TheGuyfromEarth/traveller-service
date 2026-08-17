@@ -10,6 +10,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -81,12 +83,12 @@ public class PaymentController {
     @GetMapping("/methods")
     public ResponseEntity<List<PaymentMethodDTO>> getPaymentMethods(
         Authentication authentication) {
-        if (authentication == null) {
-            return ResponseEntity.ok(java.util.List.of());
-        }
         try {
-            log.info("Fetching payment methods for user: {}", (authentication != null ? authentication.getName() : "anonymous"));
             Long userId = extractUserIdFromAuth(authentication);
+            if (userId == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+            log.info("Fetching payment methods for user: {}", userId);
             List<PaymentMethodDTO> methods = paymentService.getUserPaymentMethods(userId);
             return ResponseEntity.ok(methods);
         } catch (Exception e) {
@@ -104,9 +106,11 @@ public class PaymentController {
         @Valid @RequestBody PaymentMethod paymentMethod,
         Authentication authentication) {
         try {
-            log.info("Adding payment method for user: {}", (authentication != null ? authentication.getName() : "anonymous"));
-            
             Long userId = extractUserIdFromAuth(authentication);
+            if (userId == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+            log.info("Adding payment method for user: {}", userId);
             PaymentMethodDTO methodDTO = paymentService.addPaymentMethod(userId, paymentMethod);
             
             log.info("Payment method added: {}", methodDTO.getId());
@@ -129,9 +133,11 @@ public class PaymentController {
         @PathVariable Long id,
         Authentication authentication) {
         try {
-            log.info("Removing payment method: {} for user: {}", id, (authentication != null ? authentication.getName() : "anonymous"));
-            
             Long userId = extractUserIdFromAuth(authentication);
+            if (userId == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+            log.info("Removing payment method: {} for user: {}", id, userId);
             paymentService.removePaymentMethod(userId, id);
             
             log.info("Payment method removed: {}", id);
@@ -289,17 +295,29 @@ public class PaymentController {
     }
 
     /**
-     * Helper method to extract user ID from authentication
+     * Extracts the authenticated user's database ID from the JWT principal set by
+     * {@link com.travolish.traveller.user.security.JwtAuthFilter}.
+     *
+     * <p>The filter always stores a {@link JwtAuthenticationToken} whose principal
+     * is a {@link Jwt}. The JWT subject is the user's numeric database ID
+     * (set by {@code JwtTokenProvider.generateToken}).
+     *
+     * <p>Returns {@code null} if authentication is absent or the subject cannot be
+     * parsed — callers must treat {@code null} as unauthenticated.
      */
     private Long extractUserIdFromAuth(Authentication authentication) {
         if (authentication == null) return null;
         try {
-            Object principal = authentication.getPrincipal();
-            if (principal instanceof org.springframework.security.core.userdetails.UserDetails ud) {
-                String email = ud.getUsername();
-                // Look up user by email via userRepository if available, else fallback to 1
+            if (authentication instanceof JwtAuthenticationToken jwtAuth) {
+                Jwt jwt = (Jwt) jwtAuth.getPrincipal();
+                String subject = jwt.getSubject();
+                if (subject != null && !subject.isBlank()) {
+                    return Long.parseLong(subject);
+                }
             }
-        } catch (Exception ignored) { }
-        return 1L;
+        } catch (Exception e) {
+            log.warn("Could not extract user ID from JWT principal: {}", e.getMessage());
+        }
+        return null;
     }
 }

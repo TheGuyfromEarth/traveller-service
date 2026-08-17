@@ -7,8 +7,18 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "emergency_contacts")
+/**
+ * Hotel-attached and city-level public emergency services (police, ambulance, hospital, etc.).
+ *
+ * <p>The JPA entity name is {@code EmergencyService} (not the default {@code EmergencyContact})
+ * to avoid a Hibernate entity-name collision with
+ * {@code com.travolish.traveller.user.entity.EmergencyContact}, which stores a traveller's
+ * personal ICE contacts.  The table is {@code emergency_services} for the same reason —
+ * both entities previously mapped to {@code emergency_contacts}, which is now the user module's
+ * table exclusively.
+ */
+@Entity(name = "EmergencyService")
+@Table(name = "emergency_services")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

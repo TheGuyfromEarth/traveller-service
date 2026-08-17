@@ -66,4 +66,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     // Find last successful payment for user
     @Query("SELECT p FROM Payment p WHERE p.userId = :userId AND p.paymentStatus = 'COMPLETED' ORDER BY p.completedAt DESC LIMIT 1")
     Optional<Payment> findLastSuccessfulPaymentByUserId(@Param("userId") Long userId);
+
+    // Find the most recent completed payment for a booking — used when processing cancellation refunds
+    Optional<Payment> findTopByBookingIdAndPaymentStatusOrderByCompletedAtDesc(Long bookingId, PaymentStatus status);
 }

@@ -3,12 +3,14 @@ package com.travolish.traveller.config;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.cache.caffeine.CaffeineCacheManager;
+import org.springframework.cache.caffeine.CaffeineCache;
+import org.springframework.cache.support.SimpleCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
@@ -18,22 +20,36 @@ import java.util.concurrent.TimeUnit;
 public class CacheConfig {
 
     /**
-     * Cache names and their intended TTLs:
+     * Per-cache Caffeine configuration — each cache has its own TTL and size cap.
      *
-     *  hotels                   — per-id hotel entity cache (5 min)
-     *  hotel-search             — public hotel search results (5 min)
-     *  notification-templates   — notification template rows (10 min, rarely change)
+     * <pre>
+     *  Cache name                  Max entries  TTL      Rationale
+     *  ─────────────────────────── ─────────── ─────    ──────────────────────────────────
+     *  hotels                         500       5 min    Per-id hotel entity (detail page)
+     *  hotel-search                   200       5 min    Search result pages
+     *  notification-templates         100      10 min    Rarely change; longer TTL safe
+     * </pre>
+     *
+     * Using {@link SimpleCacheManager} instead of {@link org.springframework.cache.caffeine.CaffeineCacheManager}
+     * so each cache gets its own {@link Caffeine} spec rather than sharing one.
      */
     @Bean
     public CacheManager cacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager("hotels", "hotel-search", "notification-templates");
-        manager.setCaffeine(
-            Caffeine.newBuilder()
-                .maximumSize(500)
-                .expireAfterWrite(5, TimeUnit.MINUTES)
-                .recordStats()
-        );
+        SimpleCacheManager manager = new SimpleCacheManager();
+        manager.setCaches(List.of(
+            buildCache("hotels",                 500, 5,  TimeUnit.MINUTES),
+            buildCache("hotel-search",           200, 5,  TimeUnit.MINUTES),
+            buildCache("notification-templates", 100, 10, TimeUnit.MINUTES)
+        ));
         return manager;
+    }
+
+    private CaffeineCache buildCache(String name, int maxSize, int ttl, TimeUnit unit) {
+        return new CaffeineCache(name, Caffeine.newBuilder()
+                .maximumSize(maxSize)
+                .expireAfterWrite(ttl, unit)
+                .recordStats()
+                .build());
     }
 
     /**
