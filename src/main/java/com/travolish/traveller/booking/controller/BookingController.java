@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -236,7 +237,9 @@ public class BookingController {
     @PostMapping("/{id}/cancel")
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
         // Read the booking first so we have checkInDate for the refund-policy calculation
-        return bookingService.findById(id)
+        // Split into two statements: javac widens the Optional type when map() contains a
+        // try-catch block, causing the single-expression chain to fail type-checking.
+        Optional<ResponseEntity<Void>> mapped = bookingService.findById(id)
                 .map(booking -> {
                     bookingService.cancelBooking(id);
                     // Initiate refund if a completed payment exists for this booking
@@ -247,8 +250,8 @@ public class BookingController {
                         log.error("Refund trigger failed for cancelled booking {}: {}", id, e.getMessage(), e);
                     }
                     return ResponseEntity.<Void>noContent().build();
-                })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                });
+        return mapped.orElseGet(() -> ResponseEntity.<Void>notFound().build());
     }
 
     /**

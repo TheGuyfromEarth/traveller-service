@@ -205,7 +205,7 @@ public class EmergencyContactController {
      */
     private boolean isOwner(Jwt jwt, Long userId) {
         try {
-            return Long.parseLong(jwt.getSubject()).equals(userId);
+            return Long.valueOf(jwt.getSubject()).equals(userId);
         } catch (NumberFormatException e) {
             log.warn("JWT subject '{}' is not a valid user ID", jwt.getSubject());
             return false;
