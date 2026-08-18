@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -71,6 +72,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Booking create(Booking booking) {
         booking.setId(null);
         if (booking.getStatus() == null) {
@@ -149,6 +151,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Optional<Booking> update(Long id, Booking booking) {
         return bookingRepository.findById(id).map(existing -> {
             Booking.BookingStatus previousStatus = existing.getStatus();

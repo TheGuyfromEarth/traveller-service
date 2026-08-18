@@ -86,7 +86,11 @@ public class HotelSearchService {
                 .and(HotelSpecification.withMaxRating(searchRequest.getMaxRating()))
                 .and(HotelSpecification.withBbox(
                         searchRequest.getLatMin(), searchRequest.getLatMax(),
-                        searchRequest.getLngMin(), searchRequest.getLngMax()));
+                        searchRequest.getLngMin(), searchRequest.getLngMax()))
+                .and(HotelSpecification.withAvailability(
+                        searchRequest.getCheckIn(),
+                        searchRequest.getCheckOut(),
+                        searchRequest.getGuests()));
     }
 
     private HotelSearchResponse mapToResponse(Hotel hotel, int reviewCount, Double cheapestRoomPrice) {

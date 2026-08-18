@@ -1,5 +1,7 @@
 package com.travolish.traveller.hotel.dto;
 
+import java.time.LocalDate;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
@@ -22,6 +24,16 @@ public class HotelSearchRequest {
     private Double latMax;
     private Double lngMin;
     private Double lngMax;
+
+    // Availability filter — all three are optional:
+    //   checkIn + checkOut  → hotel must have at least one room free for the entire range
+    //   guests              → that room must have capacity >= guests
+    // Both conditions are evaluated in a single correlated EXISTS subquery so they
+    // combine efficiently rather than running two separate passes.
+    private LocalDate checkIn;
+    private LocalDate checkOut;
+    private Integer guests;
+
     @Default
     private Integer pageNumber = 0;
     @Default
