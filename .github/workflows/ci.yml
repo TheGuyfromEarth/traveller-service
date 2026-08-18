@@ -1,0 +1,129 @@
+name: Java CI with Gradle
+
+on:
+  push:
+    branches: [ "feature/user-profile" ]
+  pull_request:
+    branches: [ "feature/user-profile" ]
+
+env:
+  GCP_REGION: us-central1
+  AR_REPOSITORY: traveller-service
+  IMAGE_NAME: app
+  CLOUD_RUN_SERVICE: traveller-service
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write   # needed for Google Cloud auth
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
+
+      - name: Build with Gradle Wrapper
+        run: ./gradlew build
+
+      # ----- New: Google Cloud authentication -----
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure GCS bucket CORS
+        env:
+          GCS_BUCKET_NAME: ${{ secrets.GCS_BUCKET_NAME }}
+        run: |
+          if [ -z "$GCS_BUCKET_NAME" ]; then
+            echo "GCS_BUCKET_NAME secret not set — skipping CORS configuration"
+            exit 0
+          fi
+          cat > /tmp/cors.json << 'EOF'
+          [
+            {
+              "origin": ["https://travolish-ten.vercel.app", "http://localhost:5173", "http://localhost:3000"],
+              "method": ["GET", "PUT", "HEAD", "OPTIONS"],
+              "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+              "maxAgeSeconds": 3600
+            }
+          ]
+          EOF
+          gsutil cors set /tmp/cors.json "gs://$GCS_BUCKET_NAME"
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      # ----- New: build & push to Artifact Registry -----
+      - name: Build & tag image for Artifact Registry
+        run: |
+          AR_IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}"
+          docker build -t $AR_IMAGE:${{ github.sha }} -t $AR_IMAGE:latest .
+
+      - name: Push to Artifact Registry
+        run: |
+          AR_IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}"
+          docker push $AR_IMAGE:${{ github.sha }}
+          docker push $AR_IMAGE:latest
+
+      # ----- New: deploy to Cloud Run -----
+      - name: Deploy to Cloud Run
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          GCP_SA_KEY_B64=$(echo "${GCP_SA_KEY}" | base64 -w 0)
+          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
+            --image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --concurrency=80 \
+            --timeout=60 \
+            --port=8080 \
+            --allow-unauthenticated \
+            --cpu-boost \
+            --set-secrets="DB_PASSWORD=DB_PASSWORD:latest" \
+            --set-env-vars="DB_URL=${{ secrets.DB_URL }},DB_USER=${{ secrets.DB_USER }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY }},SUPABASE_BUCKET_NAME=${{ secrets.SUPABASE_BUCKET_NAME }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},GCP_SA_KEY_B64=${GCP_SA_KEY_B64},SMS_ENABLED=true,SMS_PROVIDER=twilio,TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }},TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }},TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}"
+
+      - name: Show Cloud Run service URL
+        run: |
+          gcloud run services describe ${{ env.CLOUD_RUN_SERVICE }} \
+            --region=${{ env.GCP_REGION }} \
+            --format='value(status.url)'
+
+  dependency-submission:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0

@@ -1,3 +1,155 @@
 spring:
   application:
     name: traveller-service
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 200MB      # per-file limit (images + videos)
+      max-request-size: 210MB   # total request including form fields
+  datasource:
+    url: jdbc:postgresql://db.hizprgnbtsomiucqwull.supabase.co:5432/postgres?sslmode=require
+    username: postgres
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jackson:
+    mapper:
+      accept-case-insensitive-enums: true
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 30
+        order_inserts: true
+        order_updates: true
+  sql:
+    init:
+      mode: never
+  s3:
+    bucket: travolish-bucket
+    region: us-east-1
+  mail:
+    host: smtp-relay.brevo.com
+    port: 587
+    username: ac6e86001@smtp-brevo.com
+    password: ${BREVO_SMTP_KEY}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+    from: travolish.dev@gmail.com
+    from-name: Travolish
+  task:
+    scheduling:
+      pool:
+        size: 6
+      thread-name-prefix: notification-scheduler-
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
+
+# Google Gemini API — free tier: 1,500 req/day, 15 RPM
+# Get key: https://aistudio.google.com → Get API key (no credit card needed)
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:}
+
+# Google Cloud Storage
+gcs:
+  bucket-name: travolish-avatars
+
+# Cloudflare R2 — S3-compatible object storage with zero egress fees
+r2:
+  account-id: ${R2_ACCOUNT_ID}
+  access-key-id: ${R2_ACCESS_KEY_ID}
+  secret-access-key: ${R2_SECRET_ACCESS_KEY}
+  bucket-name: ${R2_BUCKET_NAME:travolish-media}
+  public-url: ${R2_PUBLIC_URL}   # e.g. https://pub-xxxxxxxx.r2.dev or custom domain
+
+# Supabase (database connection only — storage migrated to R2)
+supabase:
+  url: https://hizprgnbtsomiucqwull.supabase.co
+  api-key: ${SUPABASE_API_KEY:}
+  bucket-name: travolish-bucket
+
+# Google OAuth2
+google:
+  oauth2:
+    client-id: 72512403565-42ic0ku6i3jrnpmle8cgc2sgcppvbsc0.apps.googleusercontent.com
+    verify-signature: true
+
+# JWT — tokens issued by this service after Google sign-in
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
+  refresh:
+    expiration: 604800000
+
+# Apple OAuth configuration
+# Razorpay payment gateway
+razorpay:
+  api:
+    key: ${RAZORPAY_KEY_ID:rzp_test_TQuJXAOqQtarVM}
+    secret: ${RAZORPAY_KEY_SECRET:}
+  # Webhook secret — set in Razorpay dashboard under Settings → Webhooks → Secret.
+  # Must be provided via env var in production; requests with a missing or non-matching
+  # X-Razorpay-Signature header will be rejected with 400 Bad Request.
+  webhook:
+    secret: ${RAZORPAY_WEBHOOK_SECRET:dummy_webhook_secret}
+
+apple:
+  client-id: ${APPLE_CLIENT_ID:com.travolish.app}
+  team-id: ${APPLE_TEAM_ID:ABCD123456}
+  key-id: ${APPLE_KEY_ID:ABCD123456}
+  key-path: ${APPLE_KEY_PATH:/path/to/apple/key.p8}
+  bundle-id: ${APPLE_BUNDLE_ID:com.travolish}
+
+# SMS configuration
+sms:
+  enabled: false
+  provider: mock
+  twilio:
+    account-sid: ${TWILIO_ACCOUNT_SID:}
+    auth-token: ${TWILIO_AUTH_TOKEN:}
+    phone-number: ${TWILIO_PHONE_NUMBER:}
+
+cors:
+  allowed-origins: http://localhost:5173,http://localhost:3000,https://travolish-ten.vercel.app
+
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/css,application/javascript,text/plain
+    min-response-size: 1024
+  error:
+    include-message: always
+    include-exception: true
+    include-stacktrace: never
+
+logging:
+  level:
+    com.travolish.traveller.notifications: INFO
+
+# ── Test data ────────────────────────────────────────────────────────────────
+# Set to true to seed admin test data on startup (users, hotels, KYC,
+# reviews, bookings, pricing rules). Skips automatically if already seeded.
+# Catalog items are always seeded by CatalogDataInitializer regardless of this flag.
+app:
+  init-test-data: false
