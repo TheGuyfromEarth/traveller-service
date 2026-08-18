@@ -234,6 +234,7 @@ public class BookingController {
      * If no completed payment exists (pay-at-property bookings) the refund step is
      * skipped silently. Refund failures are logged but do not roll back the cancellation.
      */
+
     @PostMapping("/{id}/cancel")
     public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
         // Read the booking first so we have checkInDate for the refund-policy calculation
