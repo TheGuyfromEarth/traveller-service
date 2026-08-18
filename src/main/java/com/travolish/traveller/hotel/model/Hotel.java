@@ -246,6 +246,28 @@ public class Hotel {
     @Column(columnDefinition = "TEXT")
     private String adminNote;
 
+    // §9 — Pricing (hotel-level defaults; rooms may override via Room.pricePerNight etc.)
+    private Double weekdayPrice;
+
+    private Double weekendPrice;
+
+    private Double seasonalPrice;
+
+    private Double holidayPrice;
+
+    private Double weeklyDiscount;
+
+    private Double monthlyDiscount;
+
+    private Double taxes;
+
+    private Double serviceCharges;
+
+    private Double securityDeposit;
+
+    @Column(length = 10)
+    private String currency;
+
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
     public enum HotelStatus {
