@@ -129,6 +129,18 @@ public class EmailSignupService {
         User saved = userRepository.save(user);
         log.info("User {} created via email signup", saved.getId());
 
+        // TODO (WhatsApp — Phase 4): Trigger async WhatsApp welcome message via Meta Cloud API.
+        //   Condition: request.getPhone() != null && Boolean.TRUE.equals(request.getWhatsappOptIn())
+        //   Steps:
+        //     1. Inject WhatsAppService (to be created in notifications/service/).
+        //     2. Persist phone to saved.setPhone(request.getPhone()), re-save.
+        //     3. Call whatsAppService.sendWelcomeMessageAsync(saved) — fire-and-forget (@Async).
+        //        Internally this POSTs to https://graph.facebook.com/v21.0/{phone-number-id}/messages
+        //        with type="template" and the pre-approved "welcome_travolish" HSM template name.
+        //     4. Template must be approved in Meta Business Manager before going live (5–7 days).
+        //   Guard with `whatsapp.enabled` config flag so local/CI runs stay silent.
+        //   See: WhatsAppService.java (Phase 3), application.yaml `whatsapp.meta.*` (Phase 3).
+
         String accessToken = jwtTokenProvider.generateToken(saved);
         String refreshToken = jwtTokenProvider.generateRefreshToken(saved);
 

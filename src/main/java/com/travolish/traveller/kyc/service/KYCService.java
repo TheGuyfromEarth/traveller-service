@@ -197,10 +197,14 @@ public class KYCService {
 
         document = hostDocumentRepository.save(document);
         
-        // Update KYC status if this is first document
-        if (hostDocumentRepository.countByHostKYCId(hostKYC.getId()) == 1) {
+        // Reset KYC status to UNDER_REVIEW whenever a document is uploaded or re-uploaded,
+        // unless already VERIFIED (to avoid rolling back a completed verification).
+        // This ensures re-uploads after RESUBMIT_REQUESTED surface in the admin queue.
+        if (!"VERIFIED".equals(hostKYC.getKycStatus())) {
             hostKYC.setKycStatus("UNDER_REVIEW");
-            hostKYC.setVerificationLevel("LEVEL_1");
+            if ("LEVEL_0".equals(hostKYC.getVerificationLevel())) {
+                hostKYC.setVerificationLevel("LEVEL_1");
+            }
             hostKYC.setUpdatedAt(LocalDateTime.now());
             hostKYCRepository.save(hostKYC);
         }

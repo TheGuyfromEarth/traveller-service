@@ -115,6 +115,13 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                 user.setProviderId(userInfo.getSub());
                 isNewUser = true;
                 log.info("Created new Google user: {}", userInfo.getEmail());
+                // TODO (WhatsApp — Phase 4): For OAuth2 sign-ups, phone is not available at this point.
+                //   Approach: after first login, surface a "Complete your profile" step in the
+                //   frontend (OnboardingPage) to collect phone + WhatsApp consent.
+                //   Once collected, call POST /api/users/{id}/phone-verify to trigger
+                //   PhoneVerificationService (Phase 5), which then calls WhatsAppService to send
+                //   the welcome template via Meta Cloud API (graph.facebook.com/v21.0/{phone-number-id}/messages).
+                //   Same TODO applies to AppleOAuth2ServiceImpl and FacebookOAuth2ServiceImpl.
             }
 
             // Promote to ADMIN if email is in the dev whitelist (app.admin-emails)

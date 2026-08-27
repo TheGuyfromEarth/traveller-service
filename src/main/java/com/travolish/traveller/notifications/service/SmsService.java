@@ -8,6 +8,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+// TODO (WhatsApp — Phase 3): Create WhatsAppService in notifications/service/.
+//   Uses Meta Cloud API directly — no Twilio dependency needed.
+//   Single POST to: https://graph.facebook.com/v21.0/{phone-number-id}/messages
+//   Auth: Bearer token (System User access token from Meta Business Manager).
+//   Request body uses "type": "template" for business-initiated HSM messages.
+//   New config keys to add in application.yaml:
+//     whatsapp:
+//       enabled: false
+//       meta:
+//         access-token: ""        # Meta System User access token
+//         phone-number-id: ""     # from Meta Business Manager → WhatsApp → Phone Numbers
+//         api-version: "v21.0"
+//   For local dev / testing: set enabled: false — the service logs mock output instead.
+//   Use Meta's test number (from Meta Developer Console) for sandbox testing at no cost.
 @Service
 @Slf4j
 public class SmsService {
