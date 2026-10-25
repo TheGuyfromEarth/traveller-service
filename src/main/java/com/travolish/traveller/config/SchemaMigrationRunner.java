@@ -55,6 +55,9 @@ public class SchemaMigrationRunner {
         // Listing Wizard — Phase F migrations
         migrateHotelTaxonomyColumns();
         createListingDraftTables();
+
+        migrateWhatsAppTablesAndColumns();
+        migrateHostPayoutLedgerColumns();
     }
 
     private void backfillHotelStatus() {
@@ -426,6 +429,73 @@ public class SchemaMigrationRunner {
             );
         } catch (Exception e) {
             log.debug("createCollectionTableIfMissing skipped {}: {}", table, e.getMessage());
+        }
+    }
+
+    private void migrateHostPayoutLedgerColumns() {
+        addColumnIfMissing("host_bank_accounts", "ifsc_code", "VARCHAR(20)");
+        addColumnIfMissing("host_bank_accounts", "razorpay_contact_id", "VARCHAR(64)");
+        addColumnIfMissing("host_bank_accounts", "razorpay_fund_account_id", "VARCHAR(64)");
+        addColumnIfMissing("host_earnings", "payment_id", "BIGINT");
+        dropNotNullIfExists("host_earnings", "guest_id");
+        log.info("Migration: host payout / ledger columns ready");
+    }
+
+    private void migrateWhatsAppTablesAndColumns() {
+        addColumnIfMissing("user_notification_preferences", "whatsapp_enabled", "BOOLEAN NOT NULL DEFAULT FALSE");
+        addColumnIfMissing("user_notification_preferences", "whatsapp_phone_verified", "BOOLEAN NOT NULL DEFAULT FALSE");
+        addColumnIfMissing("notifications", "external_message_id", "VARCHAR(128)");
+
+        try {
+            jdbcTemplate.execute(
+                "CREATE TABLE IF NOT EXISTS whatsapp_opt_ins (" +
+                "id BIGSERIAL PRIMARY KEY, " +
+                "user_id BIGINT NOT NULL, " +
+                "phone_e164 VARCHAR(20) NOT NULL, " +
+                "opted_in_at TIMESTAMP NOT NULL, " +
+                "source VARCHAR(32) NOT NULL, " +
+                "revoked_at TIMESTAMP, " +
+                "ip_address VARCHAR(45), " +
+                "user_agent VARCHAR(500))"
+            );
+        } catch (Exception e) {
+            log.debug("whatsapp_opt_ins migration skipped: {}", e.getMessage());
+        }
+
+        try {
+            jdbcTemplate.execute(
+                "CREATE TABLE IF NOT EXISTS phone_verification_codes (" +
+                "id BIGSERIAL PRIMARY KEY, " +
+                "user_id BIGINT NOT NULL, " +
+                "phone_e164 VARCHAR(20) NOT NULL, " +
+                "code VARCHAR(10) NOT NULL, " +
+                "expires_at TIMESTAMP NOT NULL, " +
+                "consumed BOOLEAN NOT NULL DEFAULT FALSE, " +
+                "attempts INT NOT NULL DEFAULT 0, " +
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            );
+        } catch (Exception e) {
+            log.debug("phone_verification_codes migration skipped: {}", e.getMessage());
+        }
+
+        migrateNotificationTemplateUniqueConstraint();
+
+        log.info("Migration: WhatsApp tables/columns ready");
+    }
+
+    private void migrateNotificationTemplateUniqueConstraint() {
+        try {
+            jdbcTemplate.execute(
+                "ALTER TABLE notification_templates DROP CONSTRAINT IF EXISTS uk_notification_template_type_channel");
+        } catch (Exception e) {
+            log.debug("drop uk_notification_template_type_channel skipped: {}", e.getMessage());
+        }
+        try {
+            jdbcTemplate.execute(
+                "ALTER TABLE notification_templates ADD CONSTRAINT uk_notification_template_type_channel " +
+                "UNIQUE (template_type, channel)");
+        } catch (Exception e) {
+            log.debug("add composite template unique skipped: {}", e.getMessage());
         }
     }
 }

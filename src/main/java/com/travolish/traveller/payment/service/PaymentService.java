@@ -3,19 +3,28 @@ package com.travolish.traveller.payment.service;
 import com.travolish.traveller.payment.dto.*;
 import com.travolish.traveller.payment.entity.*;
 import com.travolish.traveller.payment.repository.*;
+import com.travolish.traveller.booking.model.Booking;
+import com.travolish.traveller.booking.model.BookingPaymentConfig;
+import com.travolish.traveller.booking.repository.BookingPaymentConfigRepository;
 import com.travolish.traveller.booking.repository.BookingRepository;
+import com.travolish.traveller.booking.service.BookingAccessService;
+import com.travolish.traveller.config.PlatformEconomicsProperties;
+import com.travolish.traveller.payout.service.HostLedgerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.json.JSONObject;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,25 +43,27 @@ public class PaymentService {
     private final ReceiptRepository receiptRepository;
     private final RazorpayIntegrationService razorpayService;
     private final BookingRepository bookingRepository;
+    private final BookingPaymentConfigRepository bookingPaymentConfigRepository;
+    private final BookingAccessService bookingAccessService;
+    private final PlatformEconomicsProperties economicsProperties;
+    private final HostLedgerService hostLedgerService;
     private final ModelMapper modelMapper;
     
     @Value("${razorpay.api.key:rzp_test_placeholder}")
     private String razorpayKeyId;
 
-    // Configuration Constants
-    private static final String PLATFORM_FEE_PERCENTAGE = "2.5";
-    private static final String TAX_PERCENTAGE = "18";
+    private static final int MONEY_SCALE = 2;
+    private static final RoundingMode MONEY_ROUND = RoundingMode.HALF_UP;
     private static final int MAX_RETRY_ATTEMPTS = 3;
     private static final int PENDING_EXPIRY_MINUTES = 15;
     
     /**
      * Process payment transaction
      */
-    public PaymentDTO processPayment(Long userId, PaymentRequest request) {
-        log.info("Processing payment for user: {}, booking: {}, amount: {}", userId, request.getBookingId(), request.getAmount());
+    public PaymentDTO processPayment(Long userId, boolean isAdmin, PaymentRequest request) {
+        log.info("Processing payment for user: {}, booking: {}", userId, request.getBookingId());
         
-        // Validate booking exists (would integrate with booking service)
-        validatePaymentRequest(userId, request);
+        validatePaymentRequest(userId, isAdmin, request);
         
         // Get payment method
         PaymentMethod paymentMethod = paymentMethodRepository.findById(request.getPaymentMethodId())
@@ -62,17 +73,18 @@ public class PaymentService {
             throw new IllegalStateException("Payment method does not belong to user");
         }
         
-        // Calculate amounts
-        BigDecimal baseAmount = request.getAmount();
-        BigDecimal platformFee = calculatePlatformFee(baseAmount);
-        BigDecimal taxAmount = calculateTax(baseAmount.add(platformFee));
-        BigDecimal totalAmount = baseAmount.add(platformFee).add(taxAmount);
-        BigDecimal netAmount = baseAmount;
-        
-        // Create Razorpay order
-        String orderId = razorpayService.createOrder(null, totalAmount, request.getCurrency(), "Payment for booking: " + request.getBookingId());
-        
-        // Create payment record
+        Booking booking = bookingRepository.findById(request.getBookingId())
+            .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + request.getBookingId()));
+        PaymentCheckoutAmounts amounts = computeCheckoutAmountsForBooking(booking);
+        BigDecimal baseAmount = amounts.getBaseAmount();
+        BigDecimal platformFee = amounts.getPlatformFee();
+        BigDecimal taxAmount = amounts.getTaxAmount();
+        BigDecimal totalAmount = amounts.getTotalAmount();
+        BigDecimal netAmount = amounts.getNetAmount();
+
+        cancelStalePendingPaymentsForBooking(request.getBookingId());
+
+        // Create payment record first so Razorpay receipt references our payment id
         Payment payment = Payment.builder()
             .userId(userId)
             .bookingId(request.getBookingId())
@@ -81,7 +93,6 @@ public class PaymentService {
             .currency(request.getCurrency())
             .description(request.getDescription())
             .paymentStatus(PaymentStatus.PENDING)
-            .razorpayOrderId(orderId)
             .paymentMethod(paymentMethod.getMethodType().toString())
             .baseAmount(baseAmount)
             .platformFee(platformFee)
@@ -103,26 +114,36 @@ public class PaymentService {
         }
         
         payment = paymentRepository.save(payment);
+
+        String orderId = razorpayService.createOrder(
+            payment.getId(), totalAmount, request.getCurrency(),
+            "Payment for booking: " + request.getBookingId());
+        payment.setRazorpayOrderId(orderId);
+        payment = paymentRepository.save(payment);
         log.info("Payment created with ID: {} and Razorpay order: {}", payment.getId(), orderId);
-        
+
         return modelMapper.map(payment, PaymentDTO.class);
     }
     
     /**
      * Validate payment details
      */
-    public PaymentDTO validatePayment(PaymentValidationRequest request) {
+    public PaymentDTO validatePayment(Long userId, boolean isAdmin, PaymentValidationRequest request) {
         log.info("Validating payment with order ID: {}", request.getRazorpayOrderId());
-        
-        // Verify signature
+
+        Payment payment = paymentRepository.findByRazorpayOrderId(request.getRazorpayOrderId())
+            .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+
+        assertPaymentOwnerOrAdmin(userId, isAdmin, payment);
+
+        if (PaymentStatus.COMPLETED.equals(payment.getPaymentStatus())) {
+            return modelMapper.map(payment, PaymentDTO.class);
+        }
+
         if (!razorpayService.verifyPaymentSignature(request.getRazorpayOrderId(), request.getRazorpayPaymentId(), request.getRazorpaySignature())) {
             log.warn("Payment signature verification failed for order: {}", request.getRazorpayOrderId());
             throw new IllegalStateException("Payment signature verification failed");
         }
-        
-        // Find payment by Razorpay order
-        Payment payment = paymentRepository.findByRazorpayOrderId(request.getRazorpayOrderId())
-            .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
         
         // Update payment with Razorpay details
         payment.setRazorpayPaymentId(request.getRazorpayPaymentId());
@@ -135,16 +156,9 @@ public class PaymentService {
         try {
             org.json.JSONObject paymentDetails = razorpayService.getPaymentDetails(request.getRazorpayPaymentId());
             
-            // Update status based on Razorpay response
             String razorpayStatus = paymentDetails.getString("status");
             if ("captured".equalsIgnoreCase(razorpayStatus)) {
-                payment.setPaymentStatus(PaymentStatus.COMPLETED);
-                payment.setCompletedAt(LocalDateTime.now());
-                payment.setTransactionReference(paymentDetails.optString("id"));
-                
-                // Create receipt
-                createReceipt(payment);
-                
+                applyCapturedPayment(payment, request.getRazorpayPaymentId(), paymentDetails);
                 log.info("Payment completed successfully: {}", payment.getId());
             } else if ("failed".equalsIgnoreCase(razorpayStatus)) {
                 payment.setPaymentStatus(PaymentStatus.FAILED);
@@ -155,6 +169,7 @@ public class PaymentService {
             
         } catch (Exception e) {
             log.error("Error fetching payment details from Razorpay: {}", e.getMessage(), e);
+            throw new IllegalStateException("Unable to verify payment with Razorpay");
         }
         
         payment = paymentRepository.save(payment);
@@ -243,9 +258,9 @@ public class PaymentService {
             throw new IllegalStateException("Only completed payments can be refunded");
         }
         
-        // Check refund amount
-        if (request.getRefundAmount().compareTo(payment.getAmount()) > 0) {
-            throw new IllegalArgumentException("Refund amount cannot exceed payment amount");
+        BigDecimal refundable = payment.getTotalAmount() != null ? payment.getTotalAmount() : payment.getAmount();
+        if (request.getRefundAmount().compareTo(refundable) > 0) {
+            throw new IllegalArgumentException("Refund amount cannot exceed payment total");
         }
         
         // Process refund through Razorpay
@@ -270,7 +285,7 @@ public class PaymentService {
         refund = refundRepository.save(refund);
         
         // Update payment status if full refund
-        if (request.getRefundAmount().compareTo(payment.getAmount()) == 0) {
+        if (request.getRefundAmount().compareTo(refundable) == 0) {
             payment.setPaymentStatus(PaymentStatus.REFUNDED);
             paymentRepository.save(payment);
         }
@@ -282,11 +297,16 @@ public class PaymentService {
     /**
      * Get transaction details
      */
-    public TransactionDTO getTransactionDetails(Long transactionId) {
+    public TransactionDTO getTransactionDetails(Long userId, boolean isAdmin, Long transactionId) {
         log.info("Fetching transaction details: {}", transactionId);
         
         Payment payment = paymentRepository.findById(transactionId)
             .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+
+        assertPaymentOwnerOrAdmin(userId, isAdmin, payment);
+        if (payment.getBookingId() != null) {
+            bookingAccessService.assertGuestHostOrAdmin(userId, isAdmin, payment.getBookingId());
+        }
         
         return modelMapper.map(payment, TransactionDTO.class);
     }
@@ -294,8 +314,10 @@ public class PaymentService {
     /**
      * Get receipt for booking
      */
-    public ReceiptDTO getReceiptForBooking(Long bookingId) {
+    public ReceiptDTO getReceiptForBooking(Long userId, boolean isAdmin, Long bookingId) {
         log.info("Fetching receipt for booking: {}", bookingId);
+
+        bookingAccessService.assertGuestHostOrAdmin(userId, isAdmin, bookingId);
         
         Receipt receipt = receiptRepository.findByBookingId(bookingId)
             .orElseThrow(() -> new IllegalArgumentException("Receipt not found"));
@@ -361,37 +383,44 @@ public class PaymentService {
     
     // Helper Methods
     
-    private void validatePaymentRequest(Long userId, PaymentRequest request) {
-        if (request.getAmount().compareTo(BigDecimal.ONE) < 0) {
+    private void validatePaymentRequest(Long userId, boolean isAdmin, PaymentRequest request) {
+        Booking booking = bookingRepository.findById(request.getBookingId())
+            .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + request.getBookingId()));
+        bookingAccessService.assertBookingGuestOrAdmin(userId, isAdmin, booking);
+
+        PaymentCheckoutAmounts amounts = computeCheckoutAmountsForBooking(booking);
+        if (amounts.getTotalAmount().compareTo(BigDecimal.ONE) < 0) {
             throw new IllegalArgumentException("Minimum payment amount is 1.00");
         }
-
-        if (request.getAmount().compareTo(new BigDecimal(10000000)) > 0) {
+        if (amounts.getTotalAmount().compareTo(new BigDecimal(10000000)) > 0) {
             throw new IllegalArgumentException("Maximum payment amount is 10,000,000");
         }
+    }
+    
+    private BigDecimal moneyPercent(BigDecimal amount, String percent) {
+        return amount.multiply(new BigDecimal(percent))
+            .divide(new BigDecimal(100), MONEY_SCALE, MONEY_ROUND);
+    }
 
-        // Verify the booking exists and belongs to the authenticated user
-        if (request.getBookingId() != null) {
-            bookingRepository.findById(request.getBookingId()).ifPresentOrElse(
-                booking -> {
-                    if (booking.getUserId() == null || !booking.getUserId().equals(userId)) {
-                        throw new IllegalStateException(
-                            "Booking #" + request.getBookingId() + " does not belong to the authenticated user");
-                    }
-                },
-                () -> { throw new IllegalArgumentException("Booking not found: " + request.getBookingId()); }
-            );
-        }
-    }
-    
     private BigDecimal calculatePlatformFee(BigDecimal amount) {
-        return amount.multiply(new BigDecimal(PLATFORM_FEE_PERCENTAGE)).divide(new BigDecimal(100));
+        return moneyPercent(amount, economicsProperties.getPlatformFeePercent().toPlainString());
     }
-    
+
     private BigDecimal calculateTax(BigDecimal amount) {
-        return amount.multiply(new BigDecimal(TAX_PERCENTAGE)).divide(new BigDecimal(100));
+        return moneyPercent(amount, economicsProperties.getGstPercent().toPlainString());
+    }
+
+    static long toPaise(BigDecimal amount) {
+        return amount.setScale(MONEY_SCALE, MONEY_ROUND).movePointRight(2).longValueExact();
     }
     
+    private void createReceiptIfAbsent(Payment payment) {
+        if (receiptRepository.findByPaymentId(payment.getId()).isPresent()) {
+            return;
+        }
+        createReceipt(payment);
+    }
+
     private void createReceipt(Payment payment) {
         try {
             Receipt receipt = Receipt.builder()
@@ -449,6 +478,7 @@ public class PaymentService {
     @Transactional
     public void processRefundForBookingCancellation(Long bookingId, LocalDate checkInDate) {
         log.info("Evaluating refund for cancelled booking: {}", bookingId);
+        hostLedgerService.markRefundedForBooking(bookingId);
 
         Optional<Payment> paymentOpt = paymentRepository
             .findTopByBookingIdAndPaymentStatusOrderByCompletedAtDesc(bookingId, PaymentStatus.COMPLETED);
@@ -510,15 +540,58 @@ public class PaymentService {
     }
 
     /**
-     * Step 1 of checkout: create a Razorpay order and return its ID to the frontend.
-     * The frontend opens the Razorpay checkout popup with this orderId, then calls
-     * /api/payments/validate with the resulting paymentId + signature.
+     * Step 1 of checkout: persist a PENDING payment, create Razorpay order, return both ids.
      */
-    public String createRazorpayOrder(Long userId, BigDecimal amount, String currency, Long bookingId) {
-        log.info("Creating Razorpay order for user {} booking {} amount {}", userId, bookingId, amount);
-        return razorpayService.createOrder(bookingId, amount, currency,
-            "Travolish booking payment" + (bookingId != null ? " #" + bookingId : ""));
+    public PaymentCheckoutOrderResult createRazorpayOrder(Long userId, boolean isAdmin, String currency, Long bookingId) {
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        if (bookingId == null) {
+            throw new IllegalArgumentException("bookingId is required");
+        }
+        Booking booking = bookingRepository.findById(bookingId)
+            .orElseThrow(() -> new IllegalArgumentException("Booking not found: " + bookingId));
+        bookingAccessService.assertBookingGuestOrAdmin(userId, isAdmin, booking);
+
+        PaymentCheckoutAmounts amounts = computeCheckoutAmountsForBooking(booking);
+        cancelStalePendingPaymentsForBooking(bookingId);
+
+        String resolvedCurrency = (currency != null && !currency.isBlank()) ? currency : "INR";
+
+        Payment payment = Payment.builder()
+            .userId(userId)
+            .bookingId(bookingId)
+            .amount(amounts.getBaseAmount())
+            .currency(resolvedCurrency)
+            .description("Travolish booking #" + bookingId)
+            .paymentStatus(PaymentStatus.PENDING)
+            .paymentMethod("RAZORPAY_CHECKOUT")
+            .baseAmount(amounts.getBaseAmount())
+            .platformFee(amounts.getPlatformFee())
+            .taxAmount(amounts.getTaxAmount())
+            .totalAmount(amounts.getTotalAmount())
+            .netAmount(amounts.getNetAmount())
+            .initiatedAt(LocalDateTime.now())
+            .retryCount(0)
+            .isSecure(true)
+            .paymentSource("WEB")
+            .build();
+
+        payment = paymentRepository.save(payment);
+
+        String orderId = razorpayService.createOrder(
+            payment.getId(),
+            amounts.getTotalAmount(),
+            resolvedCurrency,
+            "Travolish booking payment #" + bookingId);
+        payment.setRazorpayOrderId(orderId);
+        payment = paymentRepository.save(payment);
+
+        log.info("Checkout order {} for payment {} booking {}", orderId, payment.getId(), bookingId);
+        return new PaymentCheckoutOrderResult(orderId, payment.getId(), amounts.getTotalAmount(), resolvedCurrency);
     }
+
+    public record PaymentCheckoutOrderResult(String orderId, Long paymentId, BigDecimal amount, String currency) {}
 
     /**
      * Razorpay webhook handler — processes payment.captured / payment.failed events.
@@ -553,13 +626,16 @@ public class PaymentService {
             String razorpayPaymentId = entity.optString("id");
 
             if ("payment.captured".equals(eventType)) {
-                // Mark payment as COMPLETED
                 paymentRepository.findByRazorpayOrderId(razorpayOrderId).ifPresent(p -> {
-                    p.setPaymentStatus(PaymentStatus.COMPLETED);
-                    p.setRazorpayPaymentId(razorpayPaymentId);
-                    p.setCompletedAt(LocalDateTime.now());
-                    paymentRepository.save(p);
-                    createReceipt(p);
+                    if (!PaymentStatus.COMPLETED.equals(p.getPaymentStatus())) {
+                        try {
+                            JSONObject details = razorpayService.getPaymentDetails(razorpayPaymentId);
+                            applyCapturedPayment(p, razorpayPaymentId, details);
+                            paymentRepository.save(p);
+                        } catch (Exception ex) {
+                            log.error("Webhook capture handling failed for payment {}: {}", p.getId(), ex.getMessage());
+                        }
+                    }
                     log.info("Payment {} marked COMPLETED via webhook", p.getId());
                 });
             } else if ("payment.failed".equals(eventType)) {
@@ -570,10 +646,119 @@ public class PaymentService {
                     log.warn("Payment {} marked FAILED via webhook", p.getId());
                 });
             } else if ("refund.processed".equals(eventType)) {
+                String refundId = entity.optString("id");
+                refundRepository.findByRazorpayRefundId(refundId).ifPresent(r -> {
+                    r.setRefundStatus(RefundStatus.COMPLETED);
+                    r.setCompletedAt(LocalDateTime.now());
+                    refundRepository.save(r);
+                });
                 log.info("Refund processed for order {}", razorpayOrderId);
             }
         } catch (Exception e) {
             log.error("Error handling Razorpay webhook: {}", e.getMessage(), e);
         }
+    }
+
+    PaymentCheckoutAmounts computeCheckoutAmountsForBooking(Booking booking) {
+        BookingPaymentConfig config = bookingPaymentConfigRepository.findByHotelId(booking.getHotelId())
+            .orElseGet(() -> BookingPaymentConfig.builder()
+                .hotelId(booking.getHotelId())
+                .payFullAtBooking(true)
+                .build());
+
+        boolean payAtPropertyOnly = Boolean.TRUE.equals(config.getPayAtProperty())
+            && !Boolean.TRUE.equals(config.getPayFullAtBooking())
+            && !Boolean.TRUE.equals(config.getSecureWithPartialPayment());
+        if (payAtPropertyOnly) {
+            throw new IllegalStateException("This property accepts payment at check-in only");
+        }
+
+        BigDecimal bookingTotal = BigDecimal.valueOf(booking.getTotalPrice());
+        BigDecimal base;
+        if (Boolean.TRUE.equals(config.getSecureWithPartialPayment())
+                && config.getAdvancePaymentPercent() != null
+                && config.getAdvancePaymentPercent() > 0) {
+            base = moneyPercent(bookingTotal, config.getAdvancePaymentPercent().toString());
+        } else {
+            base = bookingTotal.setScale(MONEY_SCALE, MONEY_ROUND);
+        }
+
+        BigDecimal platformFee = calculatePlatformFee(base);
+        BigDecimal taxAmount = calculateTax(base.add(platformFee));
+        BigDecimal totalAmount = base.add(platformFee).add(taxAmount).setScale(MONEY_SCALE, MONEY_ROUND);
+
+        return PaymentCheckoutAmounts.builder()
+            .baseAmount(base)
+            .platformFee(platformFee)
+            .taxAmount(taxAmount)
+            .totalAmount(totalAmount)
+            .netAmount(base)
+            .build();
+    }
+
+    private void cancelStalePendingPaymentsForBooking(Long bookingId) {
+        for (Payment pending : paymentRepository.findByBookingIdAndPaymentStatus(bookingId, PaymentStatus.PENDING)) {
+            pending.setPaymentStatus(PaymentStatus.CANCELLED);
+            pending.setFailureReason("Superseded by new checkout");
+            paymentRepository.save(pending);
+        }
+    }
+
+    private void assertPaymentOwnerOrAdmin(Long userId, boolean isAdmin, Payment payment) {
+        if (isAdmin) {
+            return;
+        }
+        if (userId == null || payment.getUserId() == null || !payment.getUserId().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access this payment");
+        }
+    }
+
+    private void verifyRazorpayAmount(Payment payment, JSONObject paymentDetails) {
+        if (payment.getTotalAmount() == null) {
+            return;
+        }
+        long expectedPaise = toPaise(payment.getTotalAmount());
+        long actualPaise = paymentDetails.getLong("amount");
+        if (expectedPaise != actualPaise) {
+            throw new IllegalStateException("Payment amount does not match order");
+        }
+    }
+
+    private void applyCapturedPayment(Payment payment, String razorpayPaymentId, JSONObject paymentDetails) {
+        if (PaymentStatus.COMPLETED.equals(payment.getPaymentStatus())) {
+            return;
+        }
+        verifyRazorpayAmount(payment, paymentDetails);
+        payment.setRazorpayPaymentId(razorpayPaymentId);
+        payment.setPaymentStatus(PaymentStatus.COMPLETED);
+        payment.setCompletedAt(LocalDateTime.now());
+        payment.setTransactionReference(paymentDetails.optString("id"));
+        createReceiptIfAbsent(payment);
+        maybeConfirmBookingAfterPayment(payment);
+        hostLedgerService.recordPaymentCaptured(payment);
+    }
+
+    private void maybeConfirmBookingAfterPayment(Payment payment) {
+        if (payment.getBookingId() == null) {
+            return;
+        }
+        bookingRepository.findById(payment.getBookingId()).ifPresent(booking -> {
+            if (booking.getStatus() == Booking.BookingStatus.CANCELLED) {
+                return;
+            }
+            BookingPaymentConfig config = bookingPaymentConfigRepository.findByHotelId(booking.getHotelId())
+                .orElse(null);
+            boolean autoConfirm = config == null
+                || Boolean.TRUE.equals(config.getPayFullAtBooking())
+                || Boolean.TRUE.equals(config.getSecureWithPartialPayment());
+            if (!autoConfirm) {
+                return;
+            }
+            if (booking.getStatus() == Booking.BookingStatus.PENDING) {
+                booking.setStatus(Booking.BookingStatus.CONFIRMED);
+                bookingRepository.save(booking);
+                log.info("Booking {} auto-confirmed after payment {}", booking.getId(), payment.getId());
+            }
+        });
     }
 }

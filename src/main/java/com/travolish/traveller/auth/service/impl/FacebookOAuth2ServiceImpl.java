@@ -5,6 +5,7 @@ import com.travolish.traveller.auth.dto.FacebookTokenResponse;
 import com.travolish.traveller.auth.dto.FacebookUserData;
 import com.travolish.traveller.auth.dto.OAuth2AuthResponse;
 import com.travolish.traveller.auth.service.FacebookOAuth2Service;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppOnboardingHints;
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
 import com.travolish.traveller.auth.util.JwtTokenProvider;
@@ -31,6 +32,9 @@ public class FacebookOAuth2ServiceImpl implements FacebookOAuth2Service {
 
     @Autowired
     private RestTemplate restTemplate;
+
+    @Autowired
+    private WhatsAppOnboardingHints whatsAppOnboardingHints;
 
     @Value("${facebook.app-id:}")
     private String facebookAppId;
@@ -130,6 +134,7 @@ public class FacebookOAuth2ServiceImpl implements FacebookOAuth2Service {
                     .accessToken(jwtToken)
                     .refreshToken(refreshToken)
                     .isNewUser(false)
+                    .whatsAppOnboardingRequired(whatsAppOnboardingHints.isOnboardingRequired(user))
                     .build();
         } catch (Exception e) {
             log.error("Error handling Facebook OAuth2 callback", e);

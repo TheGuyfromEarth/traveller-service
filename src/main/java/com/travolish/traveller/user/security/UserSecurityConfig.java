@@ -79,6 +79,9 @@ public class UserSecurityConfig {
                         .requestMatchers("/h2-console/**").permitAll()
                         // Auth + public read endpoints
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/webhooks/whatsapp", "/api/webhooks/whatsapp/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook/razorpay").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/payouts/webhook/razorpay").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/hotels/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()

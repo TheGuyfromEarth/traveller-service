@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+
+import com.travolish.traveller.payout.service.RazorpayXService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -27,6 +29,7 @@ public class KYCService {
     private final HostKYCRepository hostKYCRepository;
     private final HostDocumentRepository hostDocumentRepository;
     private final HostBankAccountRepository hostBankAccountRepository;
+    private final RazorpayXService razorpayXService;
     private final ModelMapper modelMapper;
     
     private static final double MICRO_DEPOSIT_MIN = 0.01;
@@ -354,6 +357,7 @@ public class KYCService {
         bankAccount.setUpdatedAt(LocalDateTime.now());
         
         bankAccount = hostBankAccountRepository.save(bankAccount);
+        onBankAccountVerified(bankAccount);
         log.info("Bank account verified via micro deposit: {}", bankAccountId);
         
         return modelMapper.map(bankAccount, HostBankAccountDTO.class);
@@ -375,9 +379,16 @@ public class KYCService {
         bankAccount.setUpdatedAt(LocalDateTime.now());
         
         bankAccount = hostBankAccountRepository.save(bankAccount);
+        onBankAccountVerified(bankAccount);
         log.info("Bank account verified via document: {}", bankAccountId);
         
         return modelMapper.map(bankAccount, HostBankAccountDTO.class);
+    }
+
+    private void onBankAccountVerified(HostBankAccount bankAccount) {
+        if (bankAccount.getHostKYC() != null) {
+            razorpayXService.ensureFundAccount(bankAccount, bankAccount.getHostKYC().getHostId());
+        }
     }
     
     /**

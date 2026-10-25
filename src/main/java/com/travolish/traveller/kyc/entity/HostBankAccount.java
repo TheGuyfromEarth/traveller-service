@@ -49,6 +49,15 @@ public class HostBankAccount {
     
     @Column(name = "routing_number")
     private String routingNumber;
+
+    @Column(name = "ifsc_code")
+    private String ifscCode;
+
+    @Column(name = "razorpay_contact_id")
+    private String razorpayContactId;
+
+    @Column(name = "razorpay_fund_account_id")
+    private String razorpayFundAccountId;
     
     @Column(name = "country", nullable = false)
     private String country;

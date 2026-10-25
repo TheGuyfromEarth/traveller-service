@@ -6,6 +6,7 @@ import com.travolish.traveller.auth.dto.GoogleOAuth2Request;
 import com.travolish.traveller.auth.dto.OAuth2AuthResponse;
 import com.travolish.traveller.auth.service.GoogleOAuth2Service;
 import com.travolish.traveller.auth.util.JwtTokenProvider;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppOnboardingHints;
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,9 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WhatsAppOnboardingHints whatsAppOnboardingHints;
 
     @Value("${google.oauth2.client-id}")
     private String googleClientId;
@@ -115,13 +119,6 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                 user.setProviderId(userInfo.getSub());
                 isNewUser = true;
                 log.info("Created new Google user: {}", userInfo.getEmail());
-                // TODO (WhatsApp — Phase 4): For OAuth2 sign-ups, phone is not available at this point.
-                //   Approach: after first login, surface a "Complete your profile" step in the
-                //   frontend (OnboardingPage) to collect phone + WhatsApp consent.
-                //   Once collected, call POST /api/users/{id}/phone-verify to trigger
-                //   PhoneVerificationService (Phase 5), which then calls WhatsAppService to send
-                //   the welcome template via Meta Cloud API (graph.facebook.com/v21.0/{phone-number-id}/messages).
-                //   Same TODO applies to AppleOAuth2ServiceImpl and FacebookOAuth2ServiceImpl.
             }
 
             // Promote to ADMIN if email is in the dev whitelist (app.admin-emails)
@@ -153,6 +150,7 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                     .profileImageUrl(user.getImageKey())
                     .isNewUser(isNewUser)
                     .expiresIn(3600L) // JWT token expiry in seconds
+                    .whatsAppOnboardingRequired(whatsAppOnboardingHints.isOnboardingRequired(user))
                     .build();
         } catch (Exception e) {
             log.error("Error handling Google OAuth2 callback", e);

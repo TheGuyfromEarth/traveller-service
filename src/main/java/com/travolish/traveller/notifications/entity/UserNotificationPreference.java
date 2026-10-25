@@ -28,22 +28,12 @@ public class UserNotificationPreference {
     @Column(name = "sms_enabled", nullable = false)
     private Boolean smsEnabled = false;
 
-    // TODO (WhatsApp — Phase 3): Add WhatsApp preference columns.
-    //   Run a DB migration (Flyway/Liquibase or manual ALTER TABLE) to add:
-    //     ALTER TABLE user_notification_preferences
-    //       ADD COLUMN whatsapp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-    //       ADD COLUMN whatsapp_phone_verified BOOLEAN NOT NULL DEFAULT FALSE;
-    //   • Default false — users must explicitly opt in (Meta policy + GDPR requirement).
-    //   • whatsapp_phone_verified tracks whether the phone number has been OTP-confirmed via
-    //     Meta's own phone verification flow (see PhoneVerificationService, Phase 5).
-    //     Only send WhatsApp messages when both columns are true.
-    //   Uncomment when migration is applied:
-    // @Column(name = "whatsapp_enabled", nullable = false)
-    // private Boolean whatsappEnabled = false;
-    //
-    // @Column(name = "whatsapp_phone_verified", nullable = false)
-    // private Boolean whatsappPhoneVerified = false;
-    
+    @Column(name = "whatsapp_enabled", nullable = false)
+    private Boolean whatsappEnabled = false;
+
+    @Column(name = "whatsapp_phone_verified", nullable = false)
+    private Boolean whatsappPhoneVerified = false;
+
     @Column(name = "in_app_enabled", nullable = false)
     private Boolean inAppEnabled = true;
     

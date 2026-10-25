@@ -27,6 +27,7 @@ import com.travolish.traveller.hotel.repository.HotelRepository;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
 import com.travolish.traveller.notifications.entity.NotificationChannel;
 import com.travolish.traveller.notifications.entity.NotificationType;
+import com.travolish.traveller.notifications.service.GuestWhatsAppNotifier;
 import com.travolish.traveller.notifications.service.NotificationService;
 import com.travolish.traveller.user.repository.UserRepository;
 
@@ -39,6 +40,7 @@ public class BookingServiceImpl implements BookingService {
     private final SeasonalPricingService seasonalPricingService;
     private final DynamicPricingService dynamicPricingService;
     private final NotificationService notificationService;
+    private final GuestWhatsAppNotifier guestWhatsAppNotifier;
     private final HotelRepository hotelRepository;
     private final UserRepository userRepository;
 
@@ -47,6 +49,7 @@ public class BookingServiceImpl implements BookingService {
                            SeasonalPricingService seasonalPricingService,
                            DynamicPricingService dynamicPricingService,
                            NotificationService notificationService,
+                           GuestWhatsAppNotifier guestWhatsAppNotifier,
                            HotelRepository hotelRepository,
                            UserRepository userRepository) {
         this.bookingRepository = bookingRepository;
@@ -54,6 +57,7 @@ public class BookingServiceImpl implements BookingService {
         this.seasonalPricingService = seasonalPricingService;
         this.dynamicPricingService = dynamicPricingService;
         this.notificationService = notificationService;
+        this.guestWhatsAppNotifier = guestWhatsAppNotifier;
         this.hotelRepository = hotelRepository;
         this.userRepository = userRepository;
     }
@@ -302,6 +306,8 @@ public class BookingServiceImpl implements BookingService {
                 + "Total:     ₹" + String.format("%.2f", booking.getTotalPrice()) + "\n\n"
                 + "We look forward to welcoming you!");
         notificationService.sendNotificationAsync(guestReq);
+        guestWhatsAppNotifier.sendIfEligible(
+                booking, NotificationType.BOOKING_CONFIRMATION, GuestWhatsAppNotifier.bookingConfirmationVars(booking));
 
         // 2. Notify the host
         notifyHostOfNewBooking(booking);
@@ -343,6 +349,7 @@ public class BookingServiceImpl implements BookingService {
         SendNotificationRequest guestReq = new SendNotificationRequest();
         guestReq.setType(NotificationType.BOOKING_CANCELLATION);
         guestReq.setChannel(NotificationChannel.EMAIL);
+        guestReq.setUserId(booking.getUserId());
         guestReq.setRecipientEmail(booking.getGuestEmail());
         guestReq.setBookingId(booking.getId());
         guestReq.setHotelId(booking.getHotelId());
@@ -354,6 +361,8 @@ public class BookingServiceImpl implements BookingService {
                 + "Original check-out: " + booking.getCheckOutDate() + "\n\n"
                 + "If you did not request this cancellation, please contact support.");
         notificationService.sendNotificationAsync(guestReq);
+        guestWhatsAppNotifier.sendIfEligible(
+                booking, NotificationType.BOOKING_CANCELLATION, GuestWhatsAppNotifier.bookingCancellationVars(booking));
 
         // 2. Notify the host of the cancellation
         try {

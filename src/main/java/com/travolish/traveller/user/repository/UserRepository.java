@@ -19,6 +19,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findBySupabaseId(String supabaseId);
     Optional<User> findByProviderAndProviderId(String provider, String providerId);
 
+    Optional<User> findByPhone(String phone);
+
     // Null-aware: treat NULL role as GUEST, NULL status as ACTIVE
     @Query("SELECT u FROM User u WHERE u.role = :role OR (:role = 'GUEST' AND u.role IS NULL)")
     List<User> findByRoleWithDefault(@Param("role") String role);

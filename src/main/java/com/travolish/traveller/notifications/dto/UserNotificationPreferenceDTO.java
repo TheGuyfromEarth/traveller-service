@@ -11,6 +11,8 @@ public class UserNotificationPreferenceDTO {
     private Long userId;
     private Boolean emailEnabled;
     private Boolean smsEnabled;
+    private Boolean whatsappEnabled;
+    private Boolean whatsappPhoneVerified;
     private Boolean inAppEnabled;
     private Boolean bookingConfirmation;
     private Boolean bookingReminder;

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
@@ -51,4 +52,20 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     @Query("SELECT COUNT(n) FROM Notification n WHERE n.recipientEmail = :email AND n.isRead = false")
     Long countUnreadByRecipientEmail(@Param("email") String email);
+
+    Optional<Notification> findByExternalMessageId(String externalMessageId);
+
+    @Query("SELECT COUNT(n) > 0 FROM Notification n WHERE n.bookingId = :bookingId AND n.type = :type " +
+            "AND n.channel = :channel AND n.status IN ('SENT', 'DELIVERED')")
+    boolean existsSuccessfulWhatsAppForBooking(
+            @Param("bookingId") Long bookingId,
+            @Param("type") NotificationType type,
+            @Param("channel") NotificationChannel channel);
+
+    @Query("SELECT COUNT(n) > 0 FROM Notification n WHERE n.userId = :userId AND n.type = :type " +
+            "AND n.channel = :channel AND n.status IN ('SENT', 'DELIVERED')")
+    boolean existsSuccessfulWhatsAppForUser(
+            @Param("userId") Long userId,
+            @Param("type") NotificationType type,
+            @Param("channel") NotificationChannel channel);
 }

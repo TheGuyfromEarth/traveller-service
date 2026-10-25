@@ -6,6 +6,7 @@ import com.travolish.traveller.auth.dto.AppleOAuth2Request;
 import com.travolish.traveller.auth.dto.AppleTokenResponse;
 import com.travolish.traveller.auth.dto.OAuth2AuthResponse;
 import com.travolish.traveller.auth.service.AppleOAuth2Service;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppOnboardingHints;
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
 import com.travolish.traveller.auth.util.JwtTokenProvider;
@@ -48,6 +49,9 @@ public class AppleOAuth2ServiceImpl implements AppleOAuth2Service {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WhatsAppOnboardingHints whatsAppOnboardingHints;
 
     @Value("${apple.client-id:com.travolish.app}")
     private String appleClientId;
@@ -166,6 +170,7 @@ public class AppleOAuth2ServiceImpl implements AppleOAuth2Service {
                     .accessToken(jwtToken)
                     .refreshToken(refreshToken)
                     .isNewUser(false) // Assuming update, not new user
+                    .whatsAppOnboardingRequired(whatsAppOnboardingHints.isOnboardingRequired(user))
                     .build();
         } catch (Exception e) {
             log.error("Error handling Apple OAuth2 callback", e);
