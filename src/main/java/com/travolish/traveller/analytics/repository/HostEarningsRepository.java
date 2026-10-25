@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface HostEarningsRepository extends JpaRepository<HostEarnings, Long> {
@@ -60,4 +61,19 @@ public interface HostEarningsRepository extends JpaRepository<HostEarnings, Long
            "(SELECT he2.guestId FROM HostEarnings he2 " +
            "WHERE he2.hostId = :hostId GROUP BY he2.guestId HAVING COUNT(*) > 1)")
     List<HostEarnings> findReturningGuestEarnings(@Param("hostId") Long hostId);
+
+    Optional<HostEarnings> findByPaymentId(Long paymentId);
+
+    List<HostEarnings> findByBookingId(Long bookingId);
+
+    List<HostEarnings> findByPayoutId(Long payoutId);
+
+    @Query("SELECT SUM(he.netEarnings) FROM HostEarnings he WHERE he.hostId = :hostId AND he.status = :status")
+    BigDecimal sumNetByHostIdAndStatus(@Param("hostId") Long hostId, @Param("status") String status);
+
+    @Query("SELECT he FROM HostEarnings he WHERE he.status = 'PENDING_RELEASE' AND he.checkOutDate < :today")
+    List<HostEarnings> findPendingReleaseBeforeCheckOut(@Param("today") LocalDate today);
+
+    @Query("SELECT he FROM HostEarnings he WHERE he.hostId = :hostId AND he.status = 'EARNED' ORDER BY he.checkOutDate ASC, he.id ASC")
+    List<HostEarnings> findEarnedFifo(@Param("hostId") Long hostId);
 }

@@ -7,6 +7,9 @@ import com.travolish.traveller.auth.entity.EmailVerificationCode;
 import com.travolish.traveller.auth.repository.EmailVerificationCodeRepository;
 import com.travolish.traveller.auth.util.JwtTokenProvider;
 import com.travolish.traveller.notifications.service.EmailService;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppConsentService;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppOnboardingHints;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppOptInSource;
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +41,8 @@ public class EmailSignupService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final WhatsAppConsentService whatsAppConsentService;
+    private final WhatsAppOnboardingHints whatsAppOnboardingHints;
 
     @Value("${jwt.expiration:3600000}")
     private long jwtExpirationMs;
@@ -117,17 +122,29 @@ public class EmailSignupService {
         String lastName      = request.getLastName()  != null ? request.getLastName().trim()  : "";
         String preferredName = request.getPreferredName() != null ? request.getPreferredName().trim() : null;
 
+        if (Boolean.TRUE.equals(request.getWhatsappOptIn())
+                && (request.getPhone() == null || request.getPhone().isBlank())) {
+            throw new IllegalArgumentException("Phone is required when WhatsApp opt-in is enabled.");
+        }
+
+        String phone = request.getPhone() != null ? request.getPhone().trim() : null;
+
         User user = User.builder()
                 .email(email)
                 .firstName(firstName)
                 .lastName(lastName)
                 .preferredName(preferredName)
+                .phone(phone)
                 .provider("email")
                 .role(role)
                 .status("ACTIVE")
                 .build();
         User saved = userRepository.save(user);
         log.info("User {} created via email signup", saved.getId());
+
+        if (phone != null && Boolean.TRUE.equals(request.getWhatsappOptIn())) {
+            whatsAppConsentService.recordOptIn(saved.getId(), phone, WhatsAppOptInSource.EMAIL_SIGNUP, null, null);
+        }
 
         String accessToken = jwtTokenProvider.generateToken(saved);
         String refreshToken = jwtTokenProvider.generateRefreshToken(saved);
@@ -146,6 +163,7 @@ public class EmailSignupService {
                 .refreshToken(refreshToken)
                 .isNewUser(true)
                 .expiresIn(jwtExpirationMs / 1000)
+                .whatsAppOnboardingRequired(whatsAppOnboardingHints.isOnboardingRequired(saved))
                 .build();
     }
 

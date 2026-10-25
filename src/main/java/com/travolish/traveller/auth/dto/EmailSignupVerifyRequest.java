@@ -2,6 +2,7 @@ package com.travolish.traveller.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
@@ -24,4 +25,9 @@ public class EmailSignupVerifyRequest {
     private String firstName;
     private String lastName;
     private String preferredName;
+
+    @Pattern(regexp = "^\\+[1-9]\\d{7,14}$", message = "Phone must be E.164 format, e.g. +919876543210")
+    private String phone;
+
+    private Boolean whatsappOptIn = false;
 }

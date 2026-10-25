@@ -13,6 +13,9 @@ import com.travolish.traveller.notifications.exception.NotificationNotFoundExcep
 import com.travolish.traveller.notifications.repository.NotificationRepository;
 import com.travolish.traveller.notifications.repository.NotificationTemplateRepository;
 import com.travolish.traveller.notifications.repository.UserNotificationPreferenceRepository;
+import com.travolish.traveller.notifications.whatsapp.MetaTemplateCategory;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppConsentService;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppTemplateCatalog;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.cache.annotation.CacheEvict;
@@ -39,6 +42,8 @@ public class NotificationService {
     private final UserNotificationPreferenceRepository preferenceRepository;
     private final EmailService emailService;
     private final SmsService smsService;
+    private final WhatsAppService whatsAppService;
+    private final WhatsAppConsentService whatsAppConsentService;
     private final ModelMapper modelMapper;
     private final ApplicationContext applicationContext;
 
@@ -48,6 +53,8 @@ public class NotificationService {
             UserNotificationPreferenceRepository preferenceRepository,
             EmailService emailService,
             SmsService smsService,
+            WhatsAppService whatsAppService,
+            WhatsAppConsentService whatsAppConsentService,
             ModelMapper modelMapper,
             ApplicationContext applicationContext) {
         this.notificationRepository = notificationRepository;
@@ -55,6 +62,8 @@ public class NotificationService {
         this.preferenceRepository = preferenceRepository;
         this.emailService = emailService;
         this.smsService = smsService;
+        this.whatsAppService = whatsAppService;
+        this.whatsAppConsentService = whatsAppConsentService;
         this.modelMapper = modelMapper;
         this.applicationContext = applicationContext;
     }
@@ -78,14 +87,28 @@ public class NotificationService {
      */
     public NotificationDTO sendNotification(SendNotificationRequest request) {
         try {
+            if (request.getChannel() == NotificationChannel.WHATSAPP && isDuplicateWhatsAppSend(request)) {
+                log.info("Skipping duplicate WhatsApp notification type={} userId={} bookingId={}",
+                        request.getType(), request.getUserId(), request.getBookingId());
+                return null;
+            }
+
             // Check user preferences (skip when userId is unknown — e.g. guest bookings)
             if (request.getUserId() != null) {
                 UserNotificationPreference preference = getOrCreateUserPreference(request.getUserId());
-                if (!isNotificationAllowed(preference, request.getType())) {
+                if (!isNotificationAllowed(preference, request.getType(), request.getChannel())) {
                     log.info("Notification blocked by user preferences for userId: {}, type: {}",
                         request.getUserId(), request.getType());
                     return null;
                 }
+                if (request.getChannel() == NotificationChannel.WHATSAPP
+                        && !isWhatsAppDeliveryAllowed(request.getUserId(), preference, request.getType())) {
+                    log.info("WhatsApp blocked for userId: {} (consent/verification/category)", request.getUserId());
+                    return null;
+                }
+            } else if (request.getChannel() == NotificationChannel.WHATSAPP) {
+                log.info("WhatsApp requires userId — skipping");
+                return null;
             }
             
             // Create notification entity
@@ -237,6 +260,8 @@ public class NotificationService {
 
         if (dto.getEmailEnabled() != null) pref.setEmailEnabled(dto.getEmailEnabled());
         if (dto.getSmsEnabled() != null) pref.setSmsEnabled(dto.getSmsEnabled());
+        if (dto.getWhatsappEnabled() != null) pref.setWhatsappEnabled(dto.getWhatsappEnabled());
+        if (dto.getWhatsappPhoneVerified() != null) pref.setWhatsappPhoneVerified(dto.getWhatsappPhoneVerified());
         if (dto.getInAppEnabled() != null) pref.setInAppEnabled(dto.getInAppEnabled());
         if (dto.getBookingConfirmation() != null) pref.setBookingConfirmation(dto.getBookingConfirmation());
         if (dto.getBookingReminder() != null) pref.setBookingReminder(dto.getBookingReminder());
@@ -355,9 +380,61 @@ public class NotificationService {
                 notification.setStatus(NotificationStatus.SENT);
                 notification.setSentTime(LocalDateTime.now());
                 break;
+            case WHATSAPP:
+                sendWhatsAppNotification(notification, request);
+                break;
             default:
                 throw new NotificationException("Unknown notification channel: " + notification.getChannel());
         }
+    }
+
+    private void sendWhatsAppNotification(Notification notification, SendNotificationRequest request) {
+        if (notification.getRecipientPhone() == null || notification.getRecipientPhone().isEmpty()) {
+            throw new NotificationException("Recipient phone is required for WhatsApp notifications");
+        }
+        String wamid = whatsAppService.sendTemplateForNotificationType(
+                notification.getRecipientPhone(),
+                notification.getType(),
+                request != null ? request.getTemplateVariables() : null);
+        notification.setExternalMessageId(wamid);
+        notification.setStatus(NotificationStatus.SENT);
+        notification.setSentTime(LocalDateTime.now());
+        log.info("WhatsApp notification sent wamid={}", wamid);
+    }
+
+    private boolean isDuplicateWhatsAppSend(SendNotificationRequest request) {
+        if (request.getBookingId() != null) {
+            return notificationRepository.existsSuccessfulWhatsAppForBooking(
+                    request.getBookingId(),
+                    request.getType(),
+                    NotificationChannel.WHATSAPP);
+        }
+        if (request.getUserId() != null) {
+            return notificationRepository.existsSuccessfulWhatsAppForUser(
+                    request.getUserId(),
+                    request.getType(),
+                    NotificationChannel.WHATSAPP);
+        }
+        return false;
+    }
+
+    private boolean isWhatsAppDeliveryAllowed(Long userId, UserNotificationPreference preference, NotificationType type) {
+        if (!Boolean.TRUE.equals(preference.getWhatsappEnabled())
+                || !Boolean.TRUE.equals(preference.getWhatsappPhoneVerified())) {
+            return false;
+        }
+        if (!whatsAppConsentService.isActive(userId)) {
+            return false;
+        }
+        var templateDef = WhatsAppTemplateCatalog.forType(type);
+        if (templateDef.isEmpty()) {
+            return false;
+        }
+        if (templateDef.get().category() == MetaTemplateCategory.MARKETING
+                && !Boolean.TRUE.equals(preference.getPromotionalOffers())) {
+            return false;
+        }
+        return true;
     }
     
     private void sendEmailNotification(Notification notification, SendNotificationRequest request) {
@@ -418,7 +495,13 @@ public class NotificationService {
             });
     }
     
-    private boolean isNotificationAllowed(UserNotificationPreference preference, NotificationType type) {
+    private boolean isNotificationAllowed(UserNotificationPreference preference, NotificationType type, NotificationChannel channel) {
+        if (channel == NotificationChannel.WHATSAPP && !Boolean.TRUE.equals(preference.getWhatsappEnabled())) {
+            return false;
+        }
+        if (channel == NotificationChannel.SMS && !Boolean.TRUE.equals(preference.getSmsEnabled())) {
+            return false;
+        }
         // Check if notification type is unsubscribed
         if (preference.getUnsubscribedTypes() != null && !preference.getUnsubscribedTypes().isEmpty()) {
             String[] unsubscribed = preference.getUnsubscribedTypes().split(",");

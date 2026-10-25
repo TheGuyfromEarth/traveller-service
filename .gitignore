@@ -42,8 +42,12 @@ out/
 *.pem
 *-service-account*.json
 
+*.log
+*.log.*
+
 *.txt
 *.md
+*.docx
 *.sh
 *.bat
 *.json

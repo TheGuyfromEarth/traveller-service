@@ -35,6 +35,7 @@ public class HotelSearchService {
     // HotelSearchRequest is a Lombok @Data class — equals/hashCode cover all fields,
     // so Spring's default SimpleKeyGenerator produces a correct per-combination key.
     // Cache is evicted by HotelServiceImpl on any create / update / delete.
+
     @Cacheable(value = "hotel-search")
     @Transactional(readOnly = true)
     public Page<HotelSearchResponse> searchHotels(HotelSearchRequest searchRequest) {

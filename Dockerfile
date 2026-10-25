@@ -2,13 +2,13 @@
 # Use a tiny intermediate stage to split the fat JAR into Spring Boot's layers.
 # This dramatically improves Docker cache reuse — dependency changes are rare,
 # code changes are frequent, so we want them in separate layers.
-FROM eclipse-temurin:21-jre-alpine AS extractor
+FROM eclipse-temurin:25-jre-alpine AS extractor
 WORKDIR /app
 COPY build/libs/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract --destination extracted
 
 # ---------- Runtime stage ----------
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # Run as non-root user (security best practice)

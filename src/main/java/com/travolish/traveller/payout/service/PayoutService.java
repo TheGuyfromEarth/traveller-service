@@ -3,9 +3,9 @@ package com.travolish.traveller.payout.service;
 import com.travolish.traveller.payout.dto.*;
 import com.travolish.traveller.payout.entity.Payout;
 import com.travolish.traveller.payout.repository.PayoutRepository;
-import com.travolish.traveller.booking.repository.BookingRepository;
-import com.travolish.traveller.hotel.model.Hotel;
-import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.config.PlatformEconomicsProperties;
+import com.travolish.traveller.kyc.entity.HostBankAccount;
+import com.travolish.traveller.kyc.repository.HostBankAccountRepository;
 import com.travolish.traveller.payment.service.RazorpayIntegrationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,16 +27,14 @@ import java.util.stream.Collectors;
 public class PayoutService {
     
     private final PayoutRepository payoutRepository;
-    private final HotelRepository hotelRepository;
-    private final BookingRepository bookingRepository;
+    private final HostBankAccountRepository hostBankAccountRepository;
+    private final HostLedgerService hostLedgerService;
     private final RazorpayIntegrationService razorpayIntegrationService;
+    private final PlatformEconomicsProperties economicsProperties;
+    private final RazorpayXService razorpayXService;
     private final ModelMapper modelMapper;
-    
-    // Configuration constants
-    private static final BigDecimal COMMISSION_RATE = BigDecimal.valueOf(0.15); // 15% commission
-    private static final BigDecimal TAX_RATE = BigDecimal.valueOf(0.10); // 10% tax
-    private static final BigDecimal PAYOUT_FEE = BigDecimal.valueOf(2.50); // $2.50 per payout
-    private static final int PAYOUT_CYCLE_DAYS = 7; // Weekly payouts
+
+    private static final int PAYOUT_CYCLE_DAYS = 7;
     private static final int MAX_RETRY_ATTEMPTS = 3;
     
     /**
@@ -46,31 +44,26 @@ public class PayoutService {
     public PayoutDTO requestPayout(Long hostId, PayoutRequest request) {
         log.info("Payout request from host: {}, amount: {}", hostId, request.getAmount());
         
-        // Validate amount
-        if (request.getAmount().compareTo(BigDecimal.valueOf(10)) < 0) {
-            throw new IllegalArgumentException("Minimum payout amount is $10");
+        if (request.getAmount().compareTo(economicsProperties.getMinPayoutAmount()) < 0) {
+            throw new IllegalArgumentException("Minimum payout amount is " + economicsProperties.getMinPayoutAmount());
         }
-        
-        // Calculate deductions
-        BigDecimal grossAmount = request.getAmount();
-        BigDecimal commissionAmount = grossAmount.multiply(COMMISSION_RATE);
-        BigDecimal taxesAmount = grossAmount.multiply(TAX_RATE);
-        BigDecimal netAmount = grossAmount.subtract(commissionAmount).subtract(taxesAmount).subtract(PAYOUT_FEE);
-        
-        // Ensure net amount is positive
-        if (netAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Net payout amount would be negative");
+
+        BigDecimal available = hostLedgerService.sumEarnedAvailable(hostId);
+        if (request.getAmount().compareTo(available) > 0) {
+            throw new IllegalArgumentException("Requested amount exceeds available balance");
         }
-        
+
+        BigDecimal transferAmount = request.getAmount();
+
         Payout payout = new Payout();
         payout.setHostId(hostId);
         payout.setBankAccountId(request.getBankAccountId());
-        payout.setAmount(request.getAmount());
-        payout.setGrossAmount(grossAmount);
-        payout.setCommissionAmount(commissionAmount);
-        payout.setTaxesAmount(taxesAmount);
-        payout.setPayoutFees(PAYOUT_FEE);
-        payout.setNetAmount(netAmount);
+        payout.setAmount(transferAmount);
+        payout.setGrossAmount(transferAmount);
+        payout.setCommissionAmount(BigDecimal.ZERO);
+        payout.setTaxesAmount(BigDecimal.ZERO);
+        payout.setPayoutFees(BigDecimal.ZERO);
+        payout.setNetAmount(transferAmount);
         payout.setPayoutStatus("PENDING");
         payout.setPayoutPeriodStart(request.getPayoutPeriodStart());
         payout.setPayoutPeriodEnd(request.getPayoutPeriodEnd());
@@ -82,7 +75,8 @@ public class PayoutService {
         payout.setExpectedCompletionDate(LocalDate.now().plusDays(PAYOUT_CYCLE_DAYS));
         
         payout = payoutRepository.save(payout);
-        
+        hostLedgerService.allocateEarnedFifo(hostId, payout.getId(), transferAmount);
+
         log.info("Payout requested successfully for host: {} with ID: {}", hostId, payout.getId());
         return modelMapper.map(payout, PayoutDTO.class);
     }
@@ -191,25 +185,30 @@ public class PayoutService {
         // initiatePayoutTransfer() throws UnsupportedOperationException and the
         // payout remains in PROCESSING for manual settlement.
         try {
+            String fundAccountId = resolveFundAccountId(payout.getBankAccountId());
             String txRef = razorpayIntegrationService.initiatePayoutTransfer(
-                payout.getBankAccountId() != null ? payout.getBankAccountId().toString() : null,
+                fundAccountId,
                 payout.getNetAmount(),
                 "INR",
                 "Host payout #" + payoutId
             );
             payout.setTransactionReference(txRef);
-            payout.setPayoutStatus("COMPLETED");
-            payout.setCompletedDate(LocalDateTime.now());
-            payout.setActualCompletionDate(LocalDate.now());
-            payout = payoutRepository.save(payout);
-            log.info("Payout {} completed via gateway, tx ref: {}", payoutId, txRef);
-        } catch (UnsupportedOperationException e) {
-            log.warn("Payout gateway not yet configured — payout {} remains in PROCESSING for manual settlement",
-                    payoutId);
+            if (razorpayXService.completesPayoutSynchronously()) {
+                payout.setPayoutStatus("COMPLETED");
+                payout.setCompletedDate(LocalDateTime.now());
+                payout.setActualCompletionDate(LocalDate.now());
+                payout = payoutRepository.save(payout);
+                hostLedgerService.markPaidForPayout(payoutId);
+                log.info("Payout {} completed via gateway, tx ref: {}", payoutId, txRef);
+            } else {
+                payout = payoutRepository.save(payout);
+                log.info("Payout {} submitted to Razorpay X, tx ref: {} (awaiting webhook)", payoutId, txRef);
+            }
         } catch (Exception e) {
             payout.setPayoutStatus("FAILED");
             payout.setFailureReason("Gateway error: " + e.getMessage());
             payout = payoutRepository.save(payout);
+            hostLedgerService.revertPayoutPending(payoutId);
             log.error("Payout {} gateway transfer failed: {}", payoutId, e.getMessage(), e);
         }
 
@@ -239,7 +238,8 @@ public class PayoutService {
         payout.setUpdatedAt(LocalDateTime.now());
         
         payout = payoutRepository.save(payout);
-        
+        hostLedgerService.markPaidForPayout(payoutId);
+
         log.info("Payout completed: {} with transaction: {}", payoutId, transactionReference);
         return modelMapper.map(payout, PayoutDTO.class);
     }
@@ -261,7 +261,8 @@ public class PayoutService {
         payout.setUpdatedAt(LocalDateTime.now());
         
         payout = payoutRepository.save(payout);
-        
+        hostLedgerService.revertPayoutPending(payoutId);
+
         log.info("Payout marked as failed: {} (retry attempt: {})", payoutId, payout.getRetryCount());
         return modelMapper.map(payout, PayoutDTO.class);
     }
@@ -273,43 +274,32 @@ public class PayoutService {
     public PayoutBalanceDTO getHostBalance(Long hostId) {
         log.info("Fetching balance for host: {}", hostId);
         
-        // Calculate totals from completed payouts
         BigDecimal totalPayouts = payoutRepository.sumCompletedPayoutsByHostId(hostId);
         if (totalPayouts == null) {
             totalPayouts = BigDecimal.ZERO;
         }
-        
-        // Calculate pending amounts
+
         BigDecimal pendingBalance = payoutRepository.sumPendingPayoutsByHostId(hostId);
         if (pendingBalance == null) {
             pendingBalance = BigDecimal.ZERO;
         }
-        
-        // Sum confirmed booking revenue across all hotels owned by this host
-        BigDecimal totalEarnings = hotelRepository.findByHostId(hostId).stream()
-            .map(Hotel::getId)
-            .map(bookingRepository::getTotalRevenueForHotel)
-            .filter(r -> r != null)
-            .map(BigDecimal::valueOf)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Derive net earnings (totalEarnings less 12% platform commission)
-        BigDecimal commissions = totalEarnings.multiply(BigDecimal.valueOf(0.12));
-        BigDecimal netEarnings = totalEarnings.subtract(commissions);
-
-        // Available = total earned - already paid out - currently in-flight payouts
-        BigDecimal availableBalance = totalEarnings.subtract(totalPayouts).subtract(pendingBalance);
-        if (availableBalance.compareTo(BigDecimal.ZERO) < 0) {
-            availableBalance = BigDecimal.ZERO;
-        }
+        BigDecimal availableBalance = hostLedgerService.sumEarnedAvailable(hostId);
+        BigDecimal pendingRelease = hostLedgerService.sumPendingRelease(hostId);
+        BigDecimal totalEarnings = availableBalance.add(pendingRelease)
+            .add(pendingBalance)
+            .add(totalPayouts);
 
         PayoutBalanceDTO balanceDTO = new PayoutBalanceDTO();
         balanceDTO.setHostId(hostId);
         balanceDTO.setAvailableBalance(availableBalance);
         balanceDTO.setPendingBalance(pendingBalance);
+        balanceDTO.setPendingReleaseBalance(pendingRelease);
         balanceDTO.setTotalEarnings(totalEarnings);
         balanceDTO.setTotalPayouts(totalPayouts);
-        balanceDTO.setNetEarnings(netEarnings);
+        balanceDTO.setNetEarnings(availableBalance);
+        balanceDTO.setCurrency(economicsProperties.getCurrency());
+        balanceDTO.setMinPayoutAmount(economicsProperties.getMinPayoutAmount());
         
         // Get last completed payout date
         var lastPayout = payoutRepository.findLastCompletedPayoutByHostId(hostId);
@@ -356,25 +346,27 @@ public class PayoutService {
 
                 // Attempt the gateway transfer directly on retry
                 try {
+                    String fundAccountId = resolveFundAccountId(payout.getBankAccountId());
                     String txRef = razorpayIntegrationService.initiatePayoutTransfer(
-                        payout.getBankAccountId() != null ? payout.getBankAccountId().toString() : null,
+                        fundAccountId,
                         payout.getNetAmount(),
                         "INR",
                         "Host payout retry #" + payout.getId()
                     );
                     payout.setTransactionReference(txRef);
-                    payout.setPayoutStatus("COMPLETED");
-                    payout.setCompletedDate(LocalDateTime.now());
-                    payout.setActualCompletionDate(LocalDate.now());
                     payout.setRetryCount(0);
-                    payoutRepository.save(payout);
-                    log.info("Payout {} completed on retry, tx ref: {}", payout.getId(), txRef);
-                } catch (UnsupportedOperationException e) {
-                    // Gateway not configured — reset to APPROVED so the payout can be
-                    // picked up again once Razorpay X is set up
-                    payout.setPayoutStatus("APPROVED");
-                    payoutRepository.save(payout);
-                    log.warn("Payout gateway not configured; payout {} reset to APPROVED", payout.getId());
+                    if (razorpayXService.completesPayoutSynchronously()) {
+                        payout.setPayoutStatus("COMPLETED");
+                        payout.setCompletedDate(LocalDateTime.now());
+                        payout.setActualCompletionDate(LocalDate.now());
+                        payoutRepository.save(payout);
+                        hostLedgerService.markPaidForPayout(payout.getId());
+                        log.info("Payout {} completed on retry, tx ref: {}", payout.getId(), txRef);
+                    } else {
+                        payout.setPayoutStatus("PROCESSING");
+                        payoutRepository.save(payout);
+                        log.info("Payout {} resubmitted on retry, tx ref: {}", payout.getId(), txRef);
+                    }
                 } catch (Exception e) {
                     // Keep as FAILED; retry counter was already incremented above
                     payoutRepository.save(payout);
@@ -405,11 +397,63 @@ public class PayoutService {
         payout.setUpdatedAt(LocalDateTime.now());
         
         payout = payoutRepository.save(payout);
-        
+        hostLedgerService.revertPayoutPending(payoutId);
+
         log.info("Payout cancelled: {}", payoutId);
         return modelMapper.map(payout, PayoutDTO.class);
     }
-    
+
+    @Transactional
+    public void handleRazorpayPayoutWebhook(String payload, String signature) {
+        if (signature == null || signature.isBlank()) {
+            throw new IllegalArgumentException("Missing Razorpay webhook signature");
+        }
+        if (!razorpayXService.verifyWebhookSignature(payload, signature)) {
+            throw new IllegalArgumentException("Invalid Razorpay webhook signature");
+        }
+        org.json.JSONObject event = new org.json.JSONObject(payload);
+        String eventType = event.optString("event");
+        org.json.JSONObject payloadObj = event.optJSONObject("payload");
+        if (payloadObj == null) {
+            return;
+        }
+        org.json.JSONObject payoutObj = payloadObj.optJSONObject("payout");
+        if (payoutObj == null) {
+            return;
+        }
+        org.json.JSONObject entity = payoutObj.optJSONObject("entity");
+        if (entity == null) {
+            return;
+        }
+        String razorpayPayoutId = entity.optString("id");
+        payoutRepository.findByTransactionReference(razorpayPayoutId).ifPresent(p -> {
+            if ("payout.processed".equals(eventType)) {
+                p.setPayoutStatus("COMPLETED");
+                p.setCompletedDate(LocalDateTime.now());
+                p.setActualCompletionDate(LocalDate.now());
+                payoutRepository.save(p);
+                hostLedgerService.markPaidForPayout(p.getId());
+            } else if ("payout.failed".equals(eventType) || "payout.reversed".equals(eventType)) {
+                p.setPayoutStatus("FAILED");
+                p.setFailureReason(entity.optString("status_description", "Payout failed"));
+                payoutRepository.save(p);
+                hostLedgerService.revertPayoutPending(p.getId());
+            }
+        });
+    }
+
+    private String resolveFundAccountId(Long bankAccountId) {
+        if (bankAccountId == null) {
+            throw new IllegalArgumentException("Bank account is required for payout");
+        }
+        HostBankAccount bank = hostBankAccountRepository.findById(bankAccountId)
+            .orElseThrow(() -> new IllegalArgumentException("Bank account not found"));
+        if (bank.getRazorpayFundAccountId() == null || bank.getRazorpayFundAccountId().isBlank()) {
+            throw new IllegalStateException("Bank account is not linked to Razorpay X — verify the account first");
+        }
+        return bank.getRazorpayFundAccountId();
+    }
+
     /**
      * Get payouts by date range for a host
      */

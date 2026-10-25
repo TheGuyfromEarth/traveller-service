@@ -19,3 +19,8 @@ app:
   init-test-data: true
   # Comma-separated emails that receive ADMIN role on first Google sign-in (local dev only)
   admin-emails: rgupta73@deloitte.com
+
+# Local-dev JWT secret — never use this value in production.
+# Must be ≥ 64 bytes for HS512. Production reads JWT_SECRET from the environment.
+jwt:
+  secret: "travolish-local-dev-secret-key-not-for-production-use-padding-xxxxxxxxxxxx"

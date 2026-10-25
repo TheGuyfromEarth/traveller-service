@@ -30,6 +30,10 @@ import com.travolish.traveller.inventory.exception.OverbookingException;
 import com.travolish.traveller.inventory.service.AvailabilityService;
 import com.travolish.traveller.inventory.service.DynamicPricingService;
 import com.travolish.traveller.inventory.service.SeasonalPricingService;
+import com.travolish.traveller.notifications.service.GuestWhatsAppNotifier;
+import com.travolish.traveller.notifications.service.NotificationService;
+import com.travolish.traveller.hotel.repository.HotelRepository;
+import com.travolish.traveller.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("BookingService Unit Tests — Hotel Booking Flow")
@@ -39,6 +43,10 @@ class BookingServiceTest {
     @Mock private AvailabilityService availabilityService;
     @Mock private SeasonalPricingService seasonalPricingService;
     @Mock private DynamicPricingService dynamicPricingService;
+    @Mock private NotificationService notificationService;
+    @Mock private GuestWhatsAppNotifier guestWhatsAppNotifier;
+    @Mock private HotelRepository hotelRepository;
+    @Mock private UserRepository userRepository;
 
     @InjectMocks
     private BookingServiceImpl bookingService;

@@ -263,6 +263,22 @@ public class PayoutController {
      * Admin: Get pending payouts
      * GET /api/payouts/admin/pending
      */
+    @PostMapping("/webhook/razorpay")
+    public ResponseEntity<Void> handleRazorpayPayoutWebhook(
+        @RequestBody String payload,
+        @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature) {
+        try {
+            payoutService.handleRazorpayPayoutWebhook(payload, signature);
+            return ResponseEntity.ok().build();
+        } catch (IllegalArgumentException e) {
+            log.warn("Razorpay payout webhook rejected: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (Exception e) {
+            log.error("Error processing Razorpay payout webhook", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     @GetMapping("/admin/pending")
     public ResponseEntity<List<PayoutDTO>> getPendingPayouts(Authentication authentication) {
         try {

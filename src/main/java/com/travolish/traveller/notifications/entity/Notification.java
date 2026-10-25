@@ -74,6 +74,9 @@ public class Notification {
     
     @Column(name = "sent_time")
     private LocalDateTime sentTime;
+
+    @Column(name = "external_message_id", length = 128)
+    private String externalMessageId;
     
     @Column(name = "read_time")
     private LocalDateTime readTime;

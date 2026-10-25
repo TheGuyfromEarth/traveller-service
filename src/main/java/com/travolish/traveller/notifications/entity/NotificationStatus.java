@@ -4,6 +4,7 @@ public enum NotificationStatus {
     PENDING("Pending"),
     SCHEDULED("Scheduled"),
     SENT("Sent"),
+    DELIVERED("Delivered"),
     FAILED("Failed"),
     RETRY("Retry");
     

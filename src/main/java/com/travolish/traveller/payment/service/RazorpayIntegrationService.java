@@ -2,18 +2,26 @@ package com.travolish.traveller.payment.service;
 
 import com.razorpay.RazorpayClient;
 import com.razorpay.RazorpayException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import com.travolish.traveller.payout.service.RazorpayXService;
+
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RazorpayIntegrationService {
+
+    private final RazorpayXService razorpayXService;
+
+    public RazorpayIntegrationService(@Lazy RazorpayXService razorpayXService) {
+        this.razorpayXService = razorpayXService;
+    }
     
     @Value("${razorpay.api.key:dummy_key_1234567890}")
     private String razorpayApiKey;
@@ -40,9 +48,9 @@ public class RazorpayIntegrationService {
             }
             
             JSONObject orderRequest = new JSONObject();
-            orderRequest.put("amount", amount.multiply(new BigDecimal(100)).longValue()); // Convert to paise
+            orderRequest.put("amount", amount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact());
             orderRequest.put("currency", currency);
-            orderRequest.put("receipt", "payment_" + paymentId);
+            orderRequest.put("receipt", "payment_" + (paymentId != null ? paymentId : System.currentTimeMillis()));
             orderRequest.put("description", description);
             
             // Add notes
@@ -109,7 +117,7 @@ public class RazorpayIntegrationService {
             }
             
             JSONObject refundRequest = new JSONObject();
-            refundRequest.put("amount", refundAmount.multiply(new BigDecimal(100)).longValue()); // Convert to paise
+            refundRequest.put("amount", refundAmount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact());
             
             com.razorpay.Refund refund = razorpayClient.payments.refund(razorpayPaymentId, refundRequest);
             String refundId = (String) refund.get("id");
@@ -192,13 +200,7 @@ public class RazorpayIntegrationService {
      */
     public String initiatePayoutTransfer(String fundAccountId, java.math.BigDecimal amount,
                                          String currency, String purpose) {
-        // TODO(payout): Replace with razorpayClient.payouts.create(request) once
-        //   Razorpay X / Current Account is set up and RAZORPAY_X_KEY / RAZORPAY_X_SECRET
-        //   are provisioned. See https://razorpay.com/docs/razorpayx/api/payouts/
-        log.warn("Razorpay payout transfer not yet configured — fund_account={}, amount={} {}",
-                fundAccountId, amount, currency);
-        throw new UnsupportedOperationException(
-                "Payout gateway not configured. Set up Razorpay X and implement initiatePayoutTransfer().");
+        return razorpayXService.initiatePayoutTransfer(fundAccountId, amount, purpose);
     }
 
     /**

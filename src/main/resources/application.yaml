@@ -112,6 +112,20 @@ razorpay:
   # X-Razorpay-Signature header will be rejected with 400 Bad Request.
   webhook:
     secret: ${RAZORPAY_WEBHOOK_SECRET:dummy_webhook_secret}
+  x:
+    enabled: ${RAZORPAY_X_ENABLED:false}
+    mode: ${RAZORPAY_X_MODE:test}
+    account-number: ${RAZORPAY_X_ACCOUNT_NUMBER:}
+    key-id: ${RAZORPAY_X_KEY_ID:}
+    key-secret: ${RAZORPAY_X_KEY_SECRET:}
+
+travolish:
+  economics:
+    platform-fee-percent: 2.5
+    gst-percent: 18
+    currency: INR
+    min-payout-amount: 100
+    payout-mode: IMPS
 
 apple:
   client-id: ${APPLE_CLIENT_ID:com.travolish.app}
@@ -119,6 +133,16 @@ apple:
   key-id: ${APPLE_KEY_ID:ABCD123456}
   key-path: ${APPLE_KEY_PATH:/path/to/apple/key.p8}
   bundle-id: ${APPLE_BUNDLE_ID:com.travolish}
+
+# WhatsApp Cloud API (Meta) — business-initiated template messages
+whatsapp:
+  enabled: ${WHATSAPP_ENABLED:false}
+  meta:
+    access-token: ${WHATSAPP_META_ACCESS_TOKEN:}
+    app-secret: ${WHATSAPP_APP_SECRET:}
+    phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+    api-version: v21.0
+    verify-token: ${WHATSAPP_VERIFY_TOKEN:}
 
 # SMS configuration
 sms:

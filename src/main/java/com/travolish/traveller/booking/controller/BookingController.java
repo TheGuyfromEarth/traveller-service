@@ -10,8 +10,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.web.server.ResponseStatusException;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -19,14 +17,17 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.travolish.traveller.booking.dto.BookingPriceDTO;
 import com.travolish.traveller.booking.model.Booking;
 import com.travolish.traveller.booking.service.BookingService;
 import com.travolish.traveller.hotel.repository.HotelRepository;
 import com.travolish.traveller.payment.service.PaymentService;
+import com.travolish.traveller.booking.service.BookingAccessService;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
@@ -38,15 +39,18 @@ public class BookingController {
     private final com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler;
     private final HotelRepository hotelRepository;
     private final PaymentService paymentService;
+    private final BookingAccessService bookingAccessService;
 
     public BookingController(BookingService bookingService,
                              com.travolish.traveller.booking.service.BookingStatusScheduler bookingStatusScheduler,
                              HotelRepository hotelRepository,
-                             PaymentService paymentService) {
+                             PaymentService paymentService,
+                             BookingAccessService bookingAccessService) {
         this.bookingService = bookingService;
         this.bookingStatusScheduler = bookingStatusScheduler;
         this.hotelRepository = hotelRepository;
         this.paymentService = paymentService;
+        this.bookingAccessService = bookingAccessService;
     }
 
     /**
@@ -236,7 +240,8 @@ public class BookingController {
      */
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<Void> cancelBooking(@PathVariable Long id) {
+    public ResponseEntity<Void> cancelBooking(@PathVariable Long id, Authentication authentication) {
+        bookingAccessService.assertGuestHostOrAdmin(authentication, id);
         // Read the booking first so we have checkInDate for the refund-policy calculation
         // Split into two statements: javac widens the Optional type when map() contains a
         // try-catch block, causing the single-expression chain to fail type-checking.
@@ -264,7 +269,8 @@ public class BookingController {
      * still confirm for cash / in-person / voucher bookings.
      */
     @PostMapping("/{id}/confirm")
-    public ResponseEntity<Booking> confirmBooking(@PathVariable Long id) {
+    public ResponseEntity<Booking> confirmBooking(@PathVariable Long id, Authentication authentication) {
+        bookingAccessService.assertGuestHostOrAdmin(authentication, id);
         return bookingService.findById(id)
                 .map(b -> {
                     if (!paymentService.hasCompletedPayment(id)) {

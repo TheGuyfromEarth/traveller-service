@@ -38,8 +38,11 @@ public class HostEarnings {
     @Column(name = "room_id", nullable = false)
     private Long roomId;
     
-    @Column(name = "guest_id", nullable = false)
+    @Column(name = "guest_id")
     private Long guestId;
+
+    @Column(name = "payment_id")
+    private Long paymentId;
     
     @Column(name = "check_in_date", nullable = false)
     private LocalDate checkInDate;

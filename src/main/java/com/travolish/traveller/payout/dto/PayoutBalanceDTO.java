@@ -14,8 +14,9 @@ import java.time.LocalDateTime;
 @Builder
 public class PayoutBalanceDTO {
     private Long hostId;
-    private BigDecimal availableBalance; // Ready for payout
+    private BigDecimal availableBalance; // Ready for payout (EARNED)
     private BigDecimal pendingBalance;   // In pending payouts
+    private BigDecimal pendingReleaseBalance; // Awaiting check-out
     private BigDecimal totalEarnings;    // All-time earnings
     private BigDecimal totalPayouts;     // Total paid out
     private BigDecimal totalCommissions; // Total platform commission
@@ -23,4 +24,6 @@ public class PayoutBalanceDTO {
     private BigDecimal netEarnings;      // Earnings after deductions
     private LocalDateTime lastPayoutDate;
     private Integer nextPayoutDaysRemaining;
+    private String currency;
+    private BigDecimal minPayoutAmount;
 }

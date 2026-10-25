@@ -9,6 +9,7 @@ import com.travolish.traveller.hosttools.repository.AutoReplyTemplateRepository;
 import com.travolish.traveller.notifications.dto.SendNotificationRequest;
 import com.travolish.traveller.notifications.entity.NotificationChannel;
 import com.travolish.traveller.notifications.entity.NotificationType;
+import com.travolish.traveller.notifications.service.GuestWhatsAppNotifier;
 import com.travolish.traveller.notifications.service.NotificationService;
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
@@ -48,6 +49,7 @@ public class GuestReminderScheduler {
     private final HotelRepository hotelRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final GuestWhatsAppNotifier guestWhatsAppNotifier;
     private final AutoReplyTemplateRepository autoReplyTemplateRepository;
 
     /** Pre-arrival + check-in-day reminders sent at 08:00 every morning. */
@@ -154,6 +156,14 @@ public class GuestReminderScheduler {
                 req.setMessage(body);
                 req.setSendImmediately(true);
                 notificationService.sendNotificationAsync(req);
+
+                if (type == NotificationType.CHECK_OUT_REMINDER) {
+                    guestWhatsAppNotifier.sendIfEligible(
+                            b, type, GuestWhatsAppNotifier.checkOutReminderVars(b, hotelName));
+                } else {
+                    guestWhatsAppNotifier.sendIfEligible(
+                            b, type, GuestWhatsAppNotifier.reminderVars(b, hotelName));
+                }
                 sent++;
             } catch (Exception e) {
                 log.warn("GuestReminderScheduler: could not send {} reminder for booking {}: {}",

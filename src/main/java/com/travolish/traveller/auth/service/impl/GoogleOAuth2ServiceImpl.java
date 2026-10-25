@@ -6,6 +6,7 @@ import com.travolish.traveller.auth.dto.GoogleOAuth2Request;
 import com.travolish.traveller.auth.dto.OAuth2AuthResponse;
 import com.travolish.traveller.auth.service.GoogleOAuth2Service;
 import com.travolish.traveller.auth.util.JwtTokenProvider;
+import com.travolish.traveller.notifications.whatsapp.WhatsAppOnboardingHints;
 import com.travolish.traveller.user.entity.User;
 import com.travolish.traveller.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,9 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WhatsAppOnboardingHints whatsAppOnboardingHints;
 
     @Value("${google.oauth2.client-id}")
     private String googleClientId;
@@ -146,6 +150,7 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
                     .profileImageUrl(user.getImageKey())
                     .isNewUser(isNewUser)
                     .expiresIn(3600L) // JWT token expiry in seconds
+                    .whatsAppOnboardingRequired(whatsAppOnboardingHints.isOnboardingRequired(user))
                     .build();
         } catch (Exception e) {
             log.error("Error handling Google OAuth2 callback", e);

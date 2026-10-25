@@ -187,6 +187,18 @@ public class HotelServiceImpl implements HotelService {
             if (hotel.getNearbyLandmark() != null) existing.setNearbyLandmark(hotel.getNearbyLandmark());
             if (hotel.getAiTranslation() != null) existing.setAiTranslation(hotel.getAiTranslation());
 
+            // Pricing
+            if (hotel.getWeekdayPrice() != null) existing.setWeekdayPrice(hotel.getWeekdayPrice());
+            if (hotel.getWeekendPrice() != null) existing.setWeekendPrice(hotel.getWeekendPrice());
+            if (hotel.getSeasonalPrice() != null) existing.setSeasonalPrice(hotel.getSeasonalPrice());
+            if (hotel.getHolidayPrice() != null) existing.setHolidayPrice(hotel.getHolidayPrice());
+            if (hotel.getWeeklyDiscount() != null) existing.setWeeklyDiscount(hotel.getWeeklyDiscount());
+            if (hotel.getMonthlyDiscount() != null) existing.setMonthlyDiscount(hotel.getMonthlyDiscount());
+            if (hotel.getTaxes() != null) existing.setTaxes(hotel.getTaxes());
+            if (hotel.getServiceCharges() != null) existing.setServiceCharges(hotel.getServiceCharges());
+            if (hotel.getSecurityDeposit() != null) existing.setSecurityDeposit(hotel.getSecurityDeposit());
+            if (hotel.getCurrency() != null) existing.setCurrency(hotel.getCurrency());
+
             // Media
             if (hotel.getImageUrl() != null) existing.setImageUrl(hotel.getImageUrl());
             if (hotel.getVideoUrl() != null) existing.setVideoUrl(hotel.getVideoUrl());

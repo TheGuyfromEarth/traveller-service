@@ -7,7 +7,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "notification_templates", indexes = {
+@Table(name = "notification_templates",
+    uniqueConstraints = @UniqueConstraint(name = "uk_notification_template_type_channel", columnNames = {"template_type", "channel"}),
+    indexes = {
     @Index(name = "idx_template_type", columnList = "template_type")
 })
 @Data
@@ -19,7 +21,7 @@ public class NotificationTemplate {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(name = "template_type", nullable = false, unique = true, length = 50)
+    @Column(name = "template_type", nullable = false, length = 50)
     @Enumerated(EnumType.STRING)
     private NotificationType type;
     

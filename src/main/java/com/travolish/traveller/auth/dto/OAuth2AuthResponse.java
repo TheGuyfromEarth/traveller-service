@@ -19,4 +19,6 @@ public class OAuth2AuthResponse {
     private String profileImageUrl;
     private Boolean isNewUser;
     private Long expiresIn;
+    /** When true, client should run WhatsApp onboarding (opt-in + phone OTP). */
+    private Boolean whatsAppOnboardingRequired;
 }

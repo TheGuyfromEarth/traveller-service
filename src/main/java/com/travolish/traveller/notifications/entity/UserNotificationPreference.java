@@ -27,7 +27,13 @@ public class UserNotificationPreference {
     
     @Column(name = "sms_enabled", nullable = false)
     private Boolean smsEnabled = false;
-    
+
+    @Column(name = "whatsapp_enabled", nullable = false)
+    private Boolean whatsappEnabled = false;
+
+    @Column(name = "whatsapp_phone_verified", nullable = false)
+    private Boolean whatsappPhoneVerified = false;
+
     @Column(name = "in_app_enabled", nullable = false)
     private Boolean inAppEnabled = true;
     
