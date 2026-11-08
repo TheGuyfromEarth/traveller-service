@@ -76,7 +76,6 @@ public class UserSecurityConfig {
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/webhooks/whatsapp", "/api/webhooks/whatsapp/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook/razorpay").permitAll()

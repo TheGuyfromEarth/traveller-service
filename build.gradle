@@ -70,9 +70,6 @@ dependencies {
 	// PostgreSQL database driver
 	runtimeOnly 'org.postgresql:postgresql:42.7.1'
 
-	// H2 in-memory database for local development (when Supabase is unreachable)
-	runtimeOnly 'com.h2database:h2'
-
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
