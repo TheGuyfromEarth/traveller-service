@@ -25,12 +25,11 @@ COPY --from=extractor /app/extracted/application/ ./
 # Cloud Run injects PORT; Spring Boot must bind to it
 EXPOSE 8080
 
-# JVM tuning critical for 512 MiB Cloud Run containers:
-#   MaxRAMPercentage=75 -> heap ~ 384 MiB (leaves room for metaspace, threads, native)
-#   UseSerialGC         -> smallest GC footprint, ideal for single-CPU containers
-#   TieredStopAtLevel=1 -> skip tier-2 JIT compilation, faster startup
-#   lazy-initialization -> defer bean creation until first use
-#   exec via sh so $PORT expands and signals (SIGTERM) propagate correctly
+# JVM tuning for 1 GiB Cloud Run containers:
+#   MaxRAMPercentage=75 -> heap ~ 768 MiB
+#   UseSerialGC         -> smallest GC footprint on single-CPU
+#   TieredStopAtLevel=1 -> faster startup (less JIT)
+#   exec via sh so $PORT expands and SIGTERM propagates
 ENTRYPOINT ["sh", "-c", "exec java \
   -XX:MaxRAMPercentage=75.0 \
   -XX:+UseSerialGC \

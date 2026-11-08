@@ -85,23 +85,25 @@ jobs:
           docker push $AR_IMAGE:latest
 
       # ----- New: deploy to Cloud Run -----
+      # Image + secrets only. Do NOT --update-env-vars: empty GitHub secrets
+      # would blank Cloud Run config (e.g. DB_URL) and crash startup before PORT bind.
+      # Plain env (DB_URL, R2_*, Twilio, etc.) is managed on the Cloud Run service.
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
             --image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --region=${{ env.GCP_REGION }} \
             --platform=managed \
-            --memory=512Mi \
+            --memory=1Gi \
             --cpu=1 \
             --min-instances=0 \
             --max-instances=3 \
             --concurrency=80 \
-            --timeout=60 \
+            --timeout=300 \
             --port=8080 \
             --allow-unauthenticated \
             --cpu-boost \
-            --update-secrets="DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,BREVO_SMTP_KEY=BREVO_SMTP_KEY:latest" \
-            --update-env-vars="SPRING_DATASOURCE_URL=${{ secrets.DB_URL }},DB_URL=${{ secrets.DB_URL }},SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USER }},DB_USER=${{ secrets.DB_USER }},RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_BUCKET_NAME=${{ secrets.SUPABASE_BUCKET_NAME }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},SMS_ENABLED=true,SMS_PROVIDER=twilio,TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }},WHATSAPP_ENABLED=false"
+            --update-secrets="DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,BREVO_SMTP_KEY=BREVO_SMTP_KEY:latest"
 
       - name: Show Cloud Run service URL
         run: |

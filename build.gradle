@@ -85,6 +85,11 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
+// Avoid Docker COPY build/libs/*.jar matching both boot + *-plain.jar
+tasks.named('jar') {
+	enabled = false
+}
+
 // Load .env file into all JavaExec tasks (bootRun + IntelliJ main-class runner)
 def loadDotEnv = { task ->
 	def envFile = file("${projectDir}/.env")
