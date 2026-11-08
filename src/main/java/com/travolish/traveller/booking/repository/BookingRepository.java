@@ -31,12 +31,18 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findByGuestEmailIgnoreCase(String guestEmail);
 
     /**
-     * Find active (CONFIRMED or PENDING) bookings whose checkout date has passed.
+     * Find CONFIRMED bookings whose checkout date has passed.
      * Used by BookingStatusScheduler to transition them to COMPLETED.
      */
-    @Query("SELECT b FROM Booking b WHERE b.status IN " +
-           "('CONFIRMED', 'PENDING') AND b.checkOutDate IS NOT NULL AND b.checkOutDate < :today")
-    List<Booking> findExpiredActiveBookings(@Param("today") LocalDate today);
+    @Query("SELECT b FROM Booking b WHERE b.status = 'CONFIRMED' " +
+           "AND b.checkOutDate IS NOT NULL AND b.checkOutDate < :today")
+    List<Booking> findExpiredConfirmedBookings(@Param("today") LocalDate today);
+
+    /**
+     * Unpaid holds past their expiry window (PENDING created before cutoff).
+     */
+    @Query("SELECT b FROM Booking b WHERE b.status = 'PENDING' AND b.createdAt < :cutoff")
+    List<Booking> findExpiredPendingHolds(@Param("cutoff") java.time.OffsetDateTime cutoff);
 
     /**
      * Find all bookings for an authenticated user (by userId)

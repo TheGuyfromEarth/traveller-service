@@ -2,10 +2,12 @@ package com.travolish.traveller.user.controller;
 
 import com.travolish.traveller.user.entity.SavedSearch;
 import com.travolish.traveller.user.repository.SavedSearchRepository;
+import com.travolish.traveller.user.security.AuthSupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
@@ -32,7 +34,8 @@ public class SavedSearchController {
 
     /** List all saved searches for a user, newest first. */
     @GetMapping
-    public ResponseEntity<List<SavedSearch>> list(@PathVariable Long userId) {
+    public ResponseEntity<List<SavedSearch>> list(@PathVariable Long userId, Authentication authentication) {
+        AuthSupport.requireSelfOrAdmin(authentication, userId);
         return ResponseEntity.ok(savedSearchRepository.findByUserIdOrderByCreatedAtDesc(userId));
     }
 
@@ -41,7 +44,9 @@ public class SavedSearchController {
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<SavedSearch> create(
             @PathVariable Long userId,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body,
+            Authentication authentication) {
+        AuthSupport.requireSelfOrAdmin(authentication, userId);
 
         // Enforce per-user limit
         long count = savedSearchRepository.countByUserId(userId);
@@ -72,7 +77,9 @@ public class SavedSearchController {
     /** Delete a specific saved search (must belong to the user). */
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ResponseEntity<Void> delete(@PathVariable Long userId, @PathVariable Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Long userId, @PathVariable Long id,
+            Authentication authentication) {
+        AuthSupport.requireSelfOrAdmin(authentication, userId);
         savedSearchRepository.deleteByIdAndUserId(id, userId);
         log.info("Saved search {} deleted for user {}", id, userId);
         return ResponseEntity.noContent().build();

@@ -66,10 +66,10 @@ public class HotelController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Hotel create(@Validated @RequestBody Hotel hotel, Authentication authentication) {
-        if (hotel.getHostId() == null && authentication != null) {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            hotel.setHostId(Long.parseLong(jwt.getSubject()));
-        }
+        Jwt jwt = (Jwt) authentication.getPrincipal();
+        Long authUserId = Long.parseLong(jwt.getSubject());
+        // Always bind listing to the authenticated user (admins may still create as themselves)
+        hotel.setHostId(authUserId);
         return hotelService.create(hotel);
     }
 

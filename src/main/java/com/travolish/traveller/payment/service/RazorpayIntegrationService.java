@@ -23,17 +23,17 @@ public class RazorpayIntegrationService {
         this.razorpayXService = razorpayXService;
     }
     
-    @Value("${razorpay.api.key:dummy_key_1234567890}")
+    @Value("${razorpay.api.key:}")
     private String razorpayApiKey;
 
-    @Value("${razorpay.api.secret:dummy_secret_1234567890}")
+    @Value("${razorpay.api.secret:}")
     private String razorpayApiSecret;
 
     /**
      * Webhook secret configured in the Razorpay dashboard under
      * Settings → Webhooks → Secret. Distinct from the API key/secret pair.
      */
-    @Value("${razorpay.webhook.secret:dummy_webhook_secret}")
+    @Value("${razorpay.webhook.secret:}")
     private String razorpayWebhookSecret;
 
     private RazorpayClient razorpayClient;
@@ -176,6 +176,10 @@ public class RazorpayIntegrationService {
      * request did not originate from Razorpay and should not be processed.
      */
     public boolean verifyWebhookSignature(String payload, String receivedSignature) {
+        if (razorpayWebhookSecret == null || razorpayWebhookSecret.isBlank()) {
+            log.error("razorpay.webhook.secret is not configured — rejecting webhook");
+            return false;
+        }
         try {
             return com.razorpay.Utils.verifyWebhookSignature(payload, receivedSignature, razorpayWebhookSecret);
         } catch (Exception e) {

@@ -103,9 +103,8 @@ jobs:
             --port=8080 \
             --allow-unauthenticated \
             --cpu-boost \
-            --set-secrets="DB_PASSWORD=DB_PASSWORD:latest" \
-            --set-secrets="WHATSAPP_META_ACCESS_TOKEN=WHATSAPP_META_ACCESS_TOKEN:latest,WHATSAPP_APP_SECRET=WHATSAPP_APP_SECRET:latest,WHATSAPP_PHONE_NUMBER_ID=WHATSAPP_PHONE_NUMBER_ID:latest,WHATSAPP_VERIFY_TOKEN=WHATSAPP_VERIFY_TOKEN:latest" \
-            --set-env-vars="DB_URL=${{ secrets.DB_URL }},DB_USER=${{ secrets.DB_USER }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY }},SUPABASE_BUCKET_NAME=${{ secrets.SUPABASE_BUCKET_NAME }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},GCP_SA_KEY_B64=${GCP_SA_KEY_B64},SMS_ENABLED=true,SMS_PROVIDER=twilio,TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }},TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }},TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }},WHATSAPP_ENABLED=false"
+            --update-secrets="DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest,BREVO_SMTP_KEY=BREVO_SMTP_KEY:latest" \
+            --update-env-vars="SPRING_DATASOURCE_URL=${{ secrets.DB_URL }},DB_URL=${{ secrets.DB_URL }},SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USER }},DB_USER=${{ secrets.DB_USER }},RAZORPAY_KEY_ID=${{ secrets.RAZORPAY_KEY_ID }},SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_API_KEY=${{ secrets.SUPABASE_API_KEY }},SUPABASE_BUCKET_NAME=${{ secrets.SUPABASE_BUCKET_NAME }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},GCP_SA_KEY_B64=${GCP_SA_KEY_B64},SMS_ENABLED=true,SMS_PROVIDER=twilio,TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }},TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }},TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }},WHATSAPP_ENABLED=false"
 
       - name: Show Cloud Run service URL
         run: |

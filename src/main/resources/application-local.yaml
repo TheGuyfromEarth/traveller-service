@@ -24,3 +24,15 @@ app:
 # Must be ≥ 64 bytes for HS512. Production reads JWT_SECRET from the environment.
 jwt:
   secret: "travolish-local-dev-secret-key-not-for-production-use-padding-xxxxxxxxxxxx"
+
+# Local-only placeholders — never deploy with these
+razorpay:
+  api:
+    key: rzp_test_local
+    secret: local_razorpay_secret
+  webhook:
+    secret: local_webhook_secret
+
+google:
+  oauth2:
+    verify-signature: false

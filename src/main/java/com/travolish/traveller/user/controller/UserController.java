@@ -9,6 +9,7 @@ import org.springframework.data.domain.Sort;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,9 +22,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.travolish.traveller.notifications.service.EmailService;
 import com.travolish.traveller.user.dto.UserDTO;
+import com.travolish.traveller.user.security.AuthSupport;
 import com.travolish.traveller.user.service.UserService;
 
 import lombok.RequiredArgsConstructor;
@@ -55,12 +58,15 @@ public class UserController {
     }
 
     @GetMapping("/by-email")
-    public ResponseEntity<UserDTO> getUserByEmail(@RequestParam String email) {
-        return ResponseEntity.ok(userService.getUserByEmail(email));
+    public ResponseEntity<UserDTO> getUserByEmail(@RequestParam String email, Authentication authentication) {
+        UserDTO user = userService.getUserByEmail(email);
+        assertSelfOrAdmin(authentication, user.getId());
+        return ResponseEntity.ok(user);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserDTO> getUserById(@PathVariable Long id) {
+    public ResponseEntity<UserDTO> getUserById(@PathVariable Long id, Authentication authentication) {
+        assertSelfOrAdmin(authentication, id);
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
@@ -81,8 +87,20 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserDTO> updateUser(@PathVariable Long id, @RequestBody UserDTO userDTO) {
+    public ResponseEntity<UserDTO> updateUser(@PathVariable Long id, @RequestBody UserDTO userDTO,
+            Authentication authentication) {
+        assertSelfOrAdmin(authentication, id);
         return ResponseEntity.ok(userService.updateUser(id, userDTO));
+    }
+
+    private static void assertSelfOrAdmin(Authentication authentication, Long userId) {
+        if (AuthSupport.isAdmin(authentication)) {
+            return;
+        }
+        Long authUserId = AuthSupport.userId(authentication);
+        if (authUserId == null || !authUserId.equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access this user");
+        }
     }
 
     @PatchMapping("/{id}/status")

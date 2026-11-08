@@ -10,11 +10,14 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,12 +61,21 @@ public class ChatService {
     }
     
     /**
-     * Get conversation by ID
+     * Get conversation by ID (caller must be a participant).
      */
-    public ConversationDTO getConversationById(Long conversationId) {
-        Conversation conversation = conversationRepository.findById(conversationId)
-            .orElseThrow(() -> new RuntimeException("Conversation not found"));
+    public ConversationDTO getConversationById(Long conversationId, Long userId) {
+        Conversation conversation = requireParticipant(conversationId, userId);
         return modelMapper.map(conversation, ConversationDTO.class);
+    }
+
+    public Conversation requireParticipant(Long conversationId, Long userId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found"));
+        if (!Objects.equals(userId, conversation.getUserId1())
+                && !Objects.equals(userId, conversation.getUserId2())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a participant in this conversation");
+        }
+        return conversation;
     }
     
     /**
@@ -82,8 +94,11 @@ public class ChatService {
      * Send a message
      */
     public MessageDTO sendMessage(Long conversationId, Long senderId, Long receiverId, String messageText) {
-        Conversation conversation = conversationRepository.findById(conversationId)
-            .orElseThrow(() -> new RuntimeException("Conversation not found"));
+        Conversation conversation = requireParticipant(conversationId, senderId);
+        if (!Objects.equals(receiverId, conversation.getUserId1())
+                && !Objects.equals(receiverId, conversation.getUserId2())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receiver is not in this conversation");
+        }
 
         Message message = new Message();
         message.setConversation(conversation);
@@ -122,7 +137,8 @@ public class ChatService {
     /**
      * Get message history for a conversation (paginated)
      */
-    public Page<MessageDTO> getConversationHistory(Long conversationId, int page, int pageSize) {
+    public Page<MessageDTO> getConversationHistory(Long conversationId, Long userId, int page, int pageSize) {
+        requireParticipant(conversationId, userId);
         Page<Message> messages = messageRepository.findByConversationIdPaged(
             conversationId, 
             PageRequest.of(page, pageSize)
@@ -152,6 +168,7 @@ public class ChatService {
      * Mark messages as read
      */
     public void markMessagesAsRead(Long conversationId, Long userId) {
+        Conversation conversation = requireParticipant(conversationId, userId);
         List<Message> unreadMessages = messageRepository.findUnreadMessages(conversationId, userId);
         
         for (Message message : unreadMessages) {
@@ -159,10 +176,6 @@ public class ChatService {
             message.setReadAt(LocalDateTime.now());
             messageRepository.save(message);
         }
-        
-        // Update conversation's unread count
-        Conversation conversation = conversationRepository.findById(conversationId)
-            .orElseThrow(() -> new RuntimeException("Conversation not found"));
         
         if (userId.equals(conversation.getUserId1())) {
             conversation.setUser1UnreadCount(0);
@@ -174,12 +187,14 @@ public class ChatService {
     }
     
     /**
-     * Delete a message
+     * Delete a message (sender only).
      */
-    public void deleteMessage(Long messageId) {
+    public void deleteMessage(Long messageId, Long userId) {
         Message message = messageRepository.findById(messageId)
-            .orElseThrow(() -> new RuntimeException("Message not found"));
-        
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found"));
+        if (!Objects.equals(userId, message.getSenderId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the sender can delete this message");
+        }
         message.setIsDeleted(true);
         messageRepository.save(message);
     }
@@ -188,6 +203,7 @@ public class ChatService {
      * Get unread count for a specific conversation
      */
     public Integer getConversationUnreadCount(Long conversationId, Long userId) {
+        requireParticipant(conversationId, userId);
         return messageRepository.countUnreadMessages(conversationId, userId);
     }
 }

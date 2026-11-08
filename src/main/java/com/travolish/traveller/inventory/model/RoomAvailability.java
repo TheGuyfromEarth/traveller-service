@@ -9,9 +9,10 @@ import lombok.*;
 
 @Entity
 @Table(name = "room_availability", indexes = {
-    @Index(name = "idx_room_availability_room_date", columnList = "room_id, availability_date"),
     @Index(name = "idx_room_availability_hotel_date", columnList = "hotel_id, availability_date"),
     @Index(name = "idx_room_availability_date_range", columnList = "availability_date")
+}, uniqueConstraints = {
+    @UniqueConstraint(name = "uk_room_availability_room_date", columnNames = {"room_id", "availability_date"})
 })
 @Data
 @NoArgsConstructor
@@ -91,12 +92,13 @@ public class RoomAvailability {
      * Update availability based on new booking
      */
     public void addBooking() {
-        if (bookedRooms < totalRooms) {
-            bookedRooms++;
-            availableRooms = totalRooms - bookedRooms - (blockedRooms != null ? blockedRooms : 0);
-            updateStatus();
-            updatedAt = OffsetDateTime.now();
+        if (bookedRooms >= totalRooms || availableRooms == null || availableRooms <= 0) {
+            throw new IllegalStateException("No available rooms to book for date " + availabilityDate);
         }
+        bookedRooms++;
+        availableRooms = totalRooms - bookedRooms - (blockedRooms != null ? blockedRooms : 0);
+        updateStatus();
+        updatedAt = OffsetDateTime.now();
     }
 
     /**

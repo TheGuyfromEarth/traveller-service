@@ -28,6 +28,7 @@ import com.travolish.traveller.booking.service.BookingService;
 import com.travolish.traveller.hotel.repository.HotelRepository;
 import com.travolish.traveller.payment.service.PaymentService;
 import com.travolish.traveller.booking.service.BookingAccessService;
+import com.travolish.traveller.user.security.AuthSupport;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
@@ -111,40 +112,47 @@ public class BookingController {
         return result;
     }
 
-    /** On-demand status refresh — called by trips page on load so users never see stale PENDING for past stays. */
+    /** On-demand status refresh — completes past CONFIRMED stays and expires unpaid PENDING holds. */
     @PostMapping("/refresh-statuses")
     public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> refreshStatuses() {
         int updated = bookingStatusScheduler.runStatusTransition("on-demand");
         return org.springframework.http.ResponseEntity.ok(
             java.util.Map.of("transitioned", updated, "message",
-                updated > 0 ? updated + " booking(s) marked COMPLETED" : "All statuses up to date"));
+                updated > 0 ? updated + " booking(s) updated" : "All statuses up to date"));
     }
 
     /**
-     * List bookings scoped to a specific user or guest e-mail.
-     *
-     * <p>At least one of {@code userId} or {@code guestEmail} is required.
-     * Fetching all bookings with no filter is prohibited here — it dumps the entire
-     * bookings table. Admin access to all bookings is available via the paginated
-     * {@code GET /api/bookings/admin} endpoint.
+     * List bookings for the authenticated user (or admin-specified userId/guestEmail).
      */
     @GetMapping
     public List<Booking> list(
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String guestEmail) {
+            @RequestParam(required = false) String guestEmail,
+            Authentication authentication) {
+        Long authUserId = AuthSupport.userId(authentication);
+        boolean admin = AuthSupport.isAdmin(authentication);
+        if (authUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+
         if (userId != null) {
+            if (!admin && !authUserId.equals(userId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot list another user's bookings");
+            }
             return bookingService.findByUserId(userId);
         }
         if (guestEmail != null && !guestEmail.isBlank()) {
+            if (!admin) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "guestEmail filter requires admin");
+            }
             return bookingService.findByGuestEmail(guestEmail);
         }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Either userId or guestEmail is required. " +
-                "For admin access to all bookings use GET /api/bookings/admin (paginated).");
+        return bookingService.findByUserId(authUserId);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Booking> get(@PathVariable Long id) {
+    public ResponseEntity<Booking> get(@PathVariable Long id, Authentication authentication) {
+        bookingAccessService.assertGuestHostOrAdmin(authentication, id);
         return bookingService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -152,12 +160,20 @@ public class BookingController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Booking create(@Validated @RequestBody Booking booking) {
+    public Booking create(@Validated @RequestBody Booking booking, Authentication authentication) {
+        Long authUserId = AuthSupport.userId(authentication);
+        if (authUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        booking.setUserId(authUserId);
+        booking.setStatus(Booking.BookingStatus.PENDING);
         return bookingService.create(booking);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Booking> update(@PathVariable Long id, @Validated @RequestBody Booking booking) {
+    public ResponseEntity<Booking> update(@PathVariable Long id, @Validated @RequestBody Booking booking,
+            Authentication authentication) {
+        bookingAccessService.assertGuestHostOrAdmin(authentication, id);
         return bookingService.update(id, booking)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -165,6 +181,7 @@ public class BookingController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
     public void delete(@PathVariable Long id) {
         bookingService.delete(id);
     }
@@ -201,9 +218,9 @@ public class BookingController {
      * GET /api/bookings/room/1
      */
     @GetMapping("/room/{roomId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<Booking>> getBookingsByRoom(@PathVariable Long roomId) {
-        List<Booking> bookings = bookingService.findByRoomId(roomId);
-        return ResponseEntity.ok(bookings);
+        return ResponseEntity.ok(bookingService.findByRoomId(roomId));
     }
 
     /**
@@ -211,9 +228,10 @@ public class BookingController {
      * GET /api/bookings/hotel/1
      */
     @GetMapping("/hotel/{hotelId}")
-    public ResponseEntity<List<Booking>> getBookingsByHotel(@PathVariable Long hotelId) {
-        List<Booking> bookings = bookingService.findByHotelId(hotelId);
-        return ResponseEntity.ok(bookings);
+    public ResponseEntity<List<Booking>> getBookingsByHotel(@PathVariable Long hotelId,
+            Authentication authentication) {
+        bookingAccessService.assertHotelHostOrAdmin(authentication, hotelId);
+        return ResponseEntity.ok(bookingService.findByHotelId(hotelId));
     }
 
     /**
@@ -221,12 +239,12 @@ public class BookingController {
      * GET /api/bookings/room/1/confirmed?startDate=2025-12-01&endDate=2025-12-31
      */
     @GetMapping("/room/{roomId}/confirmed")
+    @PreAuthorize("hasAnyRole('HOST', 'ADMIN')")
     public ResponseEntity<List<Booking>> getConfirmedBookings(
             @PathVariable Long roomId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        List<Booking> bookings = bookingService.findConfirmedBookingsInDateRange(roomId, startDate, endDate);
-        return ResponseEntity.ok(bookings);
+        return ResponseEntity.ok(bookingService.findConfirmedBookingsInDateRange(roomId, startDate, endDate));
     }
 
     /**
@@ -271,15 +289,11 @@ public class BookingController {
     @PostMapping("/{id}/confirm")
     public ResponseEntity<Booking> confirmBooking(@PathVariable Long id, Authentication authentication) {
         bookingAccessService.assertGuestHostOrAdmin(authentication, id);
-        return bookingService.findById(id)
-                .map(b -> {
-                    if (!paymentService.hasCompletedPayment(id)) {
-                        log.warn("Confirming booking {} with no completed payment on record — " +
-                                 "acceptable for in-person/voucher bookings, verify intent", id);
-                    }
-                    b.setStatus(Booking.BookingStatus.CONFIRMED);
-                    return bookingService.update(id, b).orElse(b);
-                })
+        if (!paymentService.hasCompletedPayment(id)) {
+            log.warn("Confirming booking {} with no completed payment on record — " +
+                     "acceptable for in-person/voucher bookings, verify intent", id);
+        }
+        return bookingService.confirmBooking(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

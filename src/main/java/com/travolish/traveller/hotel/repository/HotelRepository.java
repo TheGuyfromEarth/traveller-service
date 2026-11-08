@@ -3,6 +3,10 @@ package com.travolish.traveller.hotel.repository;
 import java.util.Collection;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +17,14 @@ import com.travolish.traveller.hotel.model.Hotel;
 
 @Repository
 public interface HotelRepository extends JpaRepository<Hotel, Long>, JpaSpecificationExecutor<Hotel> {
+
+    /**
+     * Search/list fetch graph: only {@code amenities} is loaded among collections.
+     * FETCH overrides the entity's EAGER {@code @ElementCollection}s so homepage/search
+     * misses don't hydrate gallery/meals/etc. (OSIV is off — mapToResponse only touches amenities).
+     */
+    @EntityGraph(attributePaths = {"amenities"}, type = EntityGraph.EntityGraphType.FETCH)
+    Page<Hotel> findAll(Specification<Hotel> spec, Pageable pageable);
 
     List<Hotel> findByHostId(Long hostId);
 
