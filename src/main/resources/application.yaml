@@ -7,7 +7,8 @@ spring:
       max-file-size: 200MB      # per-file limit (images + videos)
       max-request-size: 210MB   # total request including form fields
   datasource:
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://localhost:5432/travolish?sslmode=prefer}}
+    # Prefer Cloud Run env (DB_URL / SPRING_DATASOURCE_URL); else Supabase Postgres.
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://db.hizprgnbtsomiucqwull.supabase.co:5432/postgres?sslmode=require}}
     username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:postgres}}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
