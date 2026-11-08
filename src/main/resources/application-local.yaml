@@ -1,0 +1,24 @@
+# Local profile overrides — uses Postgres via SPRING_DATASOURCE_URL / DB_URL (same as prod).
+# Activate with: --spring.profiles.active=local
+
+app:
+  init-test-data: true
+  # Comma-separated emails that receive ADMIN role on first Google sign-in (local dev only)
+  admin-emails: rgupta73@deloitte.com
+
+# Local-dev JWT secret — never use this value in production.
+# Must be ≥ 64 bytes for HS512. Production reads JWT_SECRET from the environment.
+jwt:
+  secret: "travolish-local-dev-secret-key-not-for-production-use-padding-xxxxxxxxxxxx"
+
+# Local-only placeholders — never deploy with these
+razorpay:
+  api:
+    key: rzp_test_local
+    secret: local_razorpay_secret
+  webhook:
+    secret: local_webhook_secret
+
+google:
+  oauth2:
+    verify-signature: false

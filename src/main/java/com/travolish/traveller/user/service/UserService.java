@@ -1,0 +1,217 @@
+package com.travolish.traveller.user.service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import lombok.extern.slf4j.Slf4j;
+import com.travolish.traveller.admin.audit.AuditLogService;
+import com.travolish.traveller.notifications.dto.SendNotificationRequest;
+import com.travolish.traveller.notifications.entity.NotificationChannel;
+import com.travolish.traveller.notifications.entity.NotificationType;
+import com.travolish.traveller.notifications.service.NotificationService;
+import com.travolish.traveller.user.dto.UserDTO;
+import com.travolish.traveller.user.entity.User;
+import com.travolish.traveller.user.exception.UserAlreadyExistsException;
+import com.travolish.traveller.user.exception.UserNotFoundException;
+import com.travolish.traveller.user.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@Transactional(readOnly = true)
+public class UserService {
+
+    private final UserRepository userRepository;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
+
+    @Transactional
+    public UserDTO createUser(UserDTO userDTO) {
+        if (userRepository.existsByEmail(userDTO.getEmail())) {
+            throw new UserAlreadyExistsException("User with email " + userDTO.getEmail() + " already exists");
+        }
+
+        User user = User.builder()
+                .firstName(userDTO.getFirstName())
+                .lastName(userDTO.getLastName())
+                .email(userDTO.getEmail())
+                .password(userDTO.getPassword())
+                .phone(userDTO.getPhone())
+                .build();
+
+        User savedUser = userRepository.save(user);
+        return convertToDTO(savedUser);
+    }
+
+    public UserDTO getUserById(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+        return convertToDTO(user);
+    }
+
+    public UserDTO getUserByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+        return convertToDTO(user);
+    }
+
+    public List<UserDTO> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    public Page<UserDTO> getUsersPage(Pageable pageable) {
+        return userRepository.findAll(pageable).map(this::convertToDTO);
+    }
+
+    public List<UserDTO> getUsersByFilter(String role, String status) {
+        List<User> users;
+        if (role != null && status != null) {
+            users = userRepository.findByRoleAndStatusWithDefault(role, status);
+        } else if (role != null) {
+            users = userRepository.findByRoleWithDefault(role);
+        } else {
+            users = userRepository.findByStatusWithDefault(status);
+        }
+        return users.stream().map(this::convertToDTO).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public UserDTO updateUser(Long id, UserDTO userDTO) {
+        User existingUser = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+
+        // Null-safe partial update — only overwrite fields that are explicitly provided
+        if (userDTO.getFirstName() != null)    existingUser.setFirstName(userDTO.getFirstName());
+        if (userDTO.getLastName() != null)     existingUser.setLastName(userDTO.getLastName());
+        if (userDTO.getPreferredName() != null) existingUser.setPreferredName(userDTO.getPreferredName());
+        if (userDTO.getEmail() != null)        existingUser.setEmail(userDTO.getEmail());
+        if (userDTO.getPhone() != null)        existingUser.setPhone(userDTO.getPhone());
+        if (userDTO.getCity() != null)         existingUser.setCity(userDTO.getCity());
+        if (userDTO.getTimeZone() != null)     existingUser.setTimeZone(userDTO.getTimeZone());
+        if (userDTO.getTravelStyle() != null)  existingUser.setTravelStyle(userDTO.getTravelStyle());
+        if (userDTO.getBio() != null)          existingUser.setBio(userDTO.getBio());
+        if (userDTO.getAvatarUrl() != null)    existingUser.setImageKey(userDTO.getAvatarUrl());
+        // Don't update password here, create a separate endpoint for password update
+
+        User updatedUser = userRepository.save(existingUser);
+        return convertToDTO(updatedUser);
+    }
+
+    @Transactional
+    public UserDTO updateUserStatus(Long id, String status) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+        String previousStatus = user.getStatus();
+        user.setStatus(status);
+        UserDTO result = convertToDTO(userRepository.save(user));
+        auditLogService.log("USER", id, "USER_STATUS_UPDATED",
+                "Status changed from " + previousStatus + " to " + status);
+        return result;
+    }
+
+    @Transactional
+    public UserDTO updateUserRole(Long id, String role) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("User not found with id: " + id));
+        String previousRole = user.getRole();
+        user.setRole(role);
+        UserDTO result = convertToDTO(userRepository.save(user));
+        auditLogService.log("USER", id, "USER_ROLE_UPDATED",
+                "Role changed from " + previousRole + " to " + role);
+        return result;
+    }
+
+    @Transactional
+    public void deleteUser(Long id) {
+        if (!userRepository.existsById(id)) {
+            throw new UserNotFoundException("User not found with id: " + id);
+        }
+        auditLogService.log("USER", id, "USER_DELETED", "User account deleted");
+        userRepository.deleteById(id);
+    }
+
+    /**
+     * Finds the backend user for the given Supabase JWT claims, creating one if
+     * it doesn't exist yet (lazy provisioning on first authenticated request).
+     *
+     * Priority:
+     *  1. Match by supabaseId  — fastest path for returning users
+     *  2. Match by email       — backfills supabaseId for pre-migration accounts
+     *  3. Create new record    — first-ever login
+     */
+    @Transactional
+    public UserDTO findOrCreateFromJwt(String supabaseId, String email, String firstName, String lastName) {
+        return userRepository.findBySupabaseId(supabaseId)
+                .map(this::convertToDTO)
+                .orElseGet(() -> userRepository.findByEmail(email)
+                        .map(existing -> {
+                            existing.setSupabaseId(supabaseId);
+                            return convertToDTO(userRepository.save(existing));
+                        })
+                        .orElseGet(() -> {
+                            User newUser = User.builder()
+                                    .supabaseId(supabaseId)
+                                    .email(email)
+                                    .firstName(firstName != null ? firstName : "")
+                                    .lastName(lastName != null ? lastName : "")
+                                    .provider("supabase")
+                                    .providerId(supabaseId)
+                                    .build();
+                            UserDTO created = convertToDTO(userRepository.save(newUser));
+                            try {
+                                sendWelcomeEmail(created, firstName);
+                            } catch (Exception e) {
+                                log.warn("Welcome email failed (user created): {}", e.getMessage());
+                            }
+                            return created;
+                        })
+                );
+    }
+
+    private void sendWelcomeEmail(UserDTO user, String firstName) {
+        String name = (firstName != null && !firstName.isBlank()) ? firstName : "there";
+        SendNotificationRequest req = new SendNotificationRequest();
+        req.setUserId(user.getId());
+        req.setType(NotificationType.WELCOME);
+        req.setChannel(NotificationChannel.EMAIL);
+        req.setRecipientEmail(user.getEmail());
+        req.setSendImmediately(true);
+        req.setSubject("Welcome to Travolish!");
+        req.setMessage("Hi " + name + ",\n\n"
+                + "Your Travolish account is ready. Start exploring hotels and book your next stay.\n\n"
+                + "Happy travels!");
+        notificationService.sendNotificationAsync(req);
+    }
+
+    private UserDTO convertToDTO(User user) {
+        return UserDTO.builder()
+                .id(user.getId())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .preferredName(user.getPreferredName())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .city(user.getCity())
+                .timeZone(user.getTimeZone())
+                .travelStyle(user.getTravelStyle())
+                .bio(user.getBio())
+                .provider(user.getProvider())
+                .providerId(user.getProviderId())
+                .imageKey(user.getImageKey())
+                .avatarUrl(user.getImageKey())
+                .role(user.getRole())
+                .status(user.getStatus())
+                .createdAt(user.getCreatedAt())
+                .build();
+    }
+}
