@@ -123,8 +123,13 @@ public class RazorpayXService {
     }
 
     public boolean verifyWebhookSignature(String payload, String signature) {
+        String secret = webhookSecret();
+        if (secret == null || secret.isBlank()) {
+            log.error("Razorpay X/webhook secret is not configured — rejecting webhook");
+            return false;
+        }
         try {
-            return com.razorpay.Utils.verifyWebhookSignature(payload, signature, webhookSecret());
+            return com.razorpay.Utils.verifyWebhookSignature(payload, signature, secret);
         } catch (Exception e) {
             log.error("Razorpay X webhook signature verification failed: {}", e.getMessage());
             return false;
@@ -132,8 +137,12 @@ public class RazorpayXService {
     }
 
     private String webhookSecret() {
-        return System.getenv().getOrDefault("RAZORPAY_X_WEBHOOK_SECRET",
-            System.getenv().getOrDefault("RAZORPAY_WEBHOOK_SECRET", "dummy_webhook_secret"));
+        String x = System.getenv("RAZORPAY_X_WEBHOOK_SECRET");
+        if (x != null && !x.isBlank()) {
+            return x;
+        }
+        String shared = System.getenv("RAZORPAY_WEBHOOK_SECRET");
+        return shared != null ? shared : "";
     }
 
     private String createContact(Long hostId, HostBankAccount bankAccount) throws Exception {

@@ -9,8 +9,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.travolish.traveller.user.security.AuthSupport;
 
 import jakarta.validation.Valid;
 import java.time.LocalDate;
@@ -163,6 +167,7 @@ public class PayoutController {
      * POST /api/payouts/{id}/approve
      */
     @PostMapping("/{id}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PayoutDTO> approvePayout(
         @PathVariable Long id,
         @RequestParam(required = false) String notes,
@@ -189,6 +194,7 @@ public class PayoutController {
      * POST /api/payouts/{id}/process
      */
     @PostMapping("/{id}/process")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PayoutDTO> processPayout(
         @PathVariable Long id,
         @RequestParam String paymentMethod,
@@ -215,6 +221,7 @@ public class PayoutController {
      * POST /api/payouts/{id}/complete
      */
     @PostMapping("/{id}/complete")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PayoutDTO> completePayout(
         @PathVariable Long id,
         @RequestParam String transactionReference,
@@ -280,6 +287,7 @@ public class PayoutController {
     }
 
     @GetMapping("/admin/pending")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<PayoutDTO>> getPendingPayouts(Authentication authentication) {
         try {
             log.info("Fetching pending payouts for admin");
@@ -296,8 +304,16 @@ public class PayoutController {
      * Resolve host ID from authentication or fallback query param
      */
     private Long resolveHostId(Authentication authentication, Long fallbackHostId) {
-        if (fallbackHostId != null) return fallbackHostId;
-        // Placeholder - in production, extract from JWT token or session
-        return 1L;
+        Long authUserId = AuthSupport.userId(authentication);
+        if (authUserId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        if (AuthSupport.isAdmin(authentication) && fallbackHostId != null) {
+            return fallbackHostId;
+        }
+        if (fallbackHostId != null && !fallbackHostId.equals(authUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot act as another host");
+        }
+        return authUserId;
     }
 }

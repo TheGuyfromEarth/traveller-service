@@ -158,48 +158,14 @@ public class BookingServiceImpl implements BookingService {
     @CacheEvict(value = "hotel-search", allEntries = true)
     public Optional<Booking> update(Long id, Booking booking) {
         return bookingRepository.findById(id).map(existing -> {
-            Booking.BookingStatus previousStatus = existing.getStatus();
-            Booking.BookingStatus newStatus = booking.getStatus();
-
-            if (newStatus == Booking.BookingStatus.CANCELLED &&
-                    previousStatus != Booking.BookingStatus.CANCELLED) {
-                availabilityService.cancelBooking(
-                    existing.getRoomId(),
-                    existing.getCheckInDate(),
-                    existing.getCheckOutDate()
-                );
-            }
-
-            existing.setRoomId(booking.getRoomId());
-            existing.setHotelId(booking.getHotelId());
+            // Status transitions only via cancelBooking() / confirm endpoint / payment webhook /
+            // BookingStatusScheduler — never from a generic PUT body.
             existing.setGuestName(booking.getGuestName());
             existing.setGuestEmail(booking.getGuestEmail());
             existing.setGuestPhone(booking.getGuestPhone());
-            existing.setCheckInDate(booking.getCheckInDate());
-            existing.setCheckOutDate(booking.getCheckOutDate());
-            existing.setBasePrice(booking.getBasePrice());
-            existing.setSeasonalAdjustment(booking.getSeasonalAdjustment());
-            existing.setDynamicPricingAdjustment(booking.getDynamicPricingAdjustment());
-            existing.setPromotionalDiscount(booking.getPromotionalDiscount());
-            existing.setTotalPrice(booking.getTotalPrice());
-            existing.setStatus(newStatus);
             existing.setNotes(booking.getNotes());
             existing.setUpdatedAt(OffsetDateTime.now());
-            Booking saved = bookingRepository.save(existing);
-
-            try {
-                if (newStatus == Booking.BookingStatus.CANCELLED &&
-                        previousStatus != Booking.BookingStatus.CANCELLED) {
-                    notifyBookingCancellation(saved);
-                } else if (newStatus == Booking.BookingStatus.CONFIRMED &&
-                        previousStatus != Booking.BookingStatus.CONFIRMED) {
-                    notifyBookingConfirmation(saved);
-                }
-            } catch (Exception e) {
-                log.warn("Booking status-change email failed (booking saved): {}", e.getMessage());
-            }
-
-            return saved;
+            return bookingRepository.save(existing);
         });
     }
 
@@ -423,5 +389,28 @@ public class BookingServiceImpl implements BookingService {
             }
         }
         return true;
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "hotel-search", allEntries = true)
+    public Optional<Booking> confirmBooking(Long bookingId) {
+        return bookingRepository.findById(bookingId).map(booking -> {
+            if (booking.getStatus() == Booking.BookingStatus.CANCELLED
+                    || booking.getStatus() == Booking.BookingStatus.COMPLETED) {
+                throw new IllegalStateException("Cannot confirm booking in status " + booking.getStatus());
+            }
+            if (booking.getStatus() != Booking.BookingStatus.CONFIRMED) {
+                booking.setStatus(Booking.BookingStatus.CONFIRMED);
+                booking.setUpdatedAt(OffsetDateTime.now());
+                booking = bookingRepository.save(booking);
+                try {
+                    notifyBookingConfirmation(booking);
+                } catch (Exception e) {
+                    log.warn("Booking confirmation email failed (booking saved): {}", e.getMessage());
+                }
+            }
+            return booking;
+        });
     }
 }

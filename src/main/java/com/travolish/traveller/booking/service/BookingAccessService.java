@@ -68,4 +68,22 @@ public class BookingAccessService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Booking does not belong to user");
         }
     }
+
+    /** Host of the hotel or admin. */
+    public void assertHotelHostOrAdmin(org.springframework.security.core.Authentication authentication,
+                                       Long hotelId) {
+        if (AuthSupport.isAdmin(authentication)) {
+            return;
+        }
+        Long userId = AuthSupport.userId(authentication);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
+        boolean hostMatch = hotelId != null && hotelRepository.findById(hotelId)
+                .map(h -> h.getHostId() != null && h.getHostId().equals(userId))
+                .orElse(false);
+        if (!hostMatch) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed to access this hotel's bookings");
+        }
+    }
 }

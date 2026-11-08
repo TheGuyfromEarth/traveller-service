@@ -368,9 +368,13 @@ public class PayoutService {
                         log.info("Payout {} resubmitted on retry, tx ref: {}", payout.getId(), txRef);
                     }
                 } catch (Exception e) {
-                    // Keep as FAILED; retry counter was already incremented above
+                    int next = (payout.getRetryCount() == null ? 0 : payout.getRetryCount()) + 1;
+                    payout.setRetryCount(next);
+                    payout.setPayoutStatus("FAILED");
+                    payout.setFailureReason(e.getMessage());
                     payoutRepository.save(payout);
-                    log.error("Payout {} retry gateway call failed: {}", payout.getId(), e.getMessage(), e);
+                    log.error("Payout {} retry gateway call failed (attempt {}): {}",
+                            payout.getId(), next, e.getMessage(), e);
                 }
             } else {
                 log.warn("Payout {} exceeded max retry attempts", payout.getId());

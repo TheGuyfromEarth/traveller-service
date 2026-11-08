@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,38 +83,68 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     @Override
     @Transactional
     public void bookRoom(Long roomId, Long hotelId, LocalDate checkInDate, LocalDate checkOutDate) {
+        // Transient unique-constraint races: retry a few times in a fresh attempt pattern
+        // (caller TX may still abort on integrity violations — BookingService retries create).
+        bookRoomOnce(roomId, hotelId, checkInDate, checkOutDate);
+    }
+
+    private void bookRoomOnce(Long roomId, Long hotelId, LocalDate checkInDate, LocalDate checkOutDate) {
         List<RoomAvailability> existing = availabilityRepository
             .findByRoomIdAndDateRangeWithLock(roomId, checkInDate, checkOutDate.minusDays(1));
 
         Map<LocalDate, RoomAvailability> byDate = existing.stream()
-            .collect(Collectors.toMap(RoomAvailability::getAvailabilityDate, a -> a));
+            .collect(Collectors.toMap(RoomAvailability::getAvailabilityDate, a -> a, (a, b) -> a));
 
         List<RoomAvailability> toBook = new ArrayList<>();
         for (LocalDate d = checkInDate; d.isBefore(checkOutDate); d = d.plusDays(1)) {
             RoomAvailability rec = byDate.get(d);
             if (rec == null) {
-                rec = new RoomAvailability();
-                rec.setRoomId(roomId);
-                rec.setHotelId(hotelId);
-                rec.setAvailabilityDate(d);
-                rec.setTotalRooms(1);
-                rec = availabilityRepository.save(rec);
+                rec = insertOrLockDay(roomId, hotelId, d);
+                byDate.put(d, rec);
             }
             if (!rec.isAvailableForBooking()) {
-                throw OverbookingException.noRoomAvailable(roomId, null);
+                throw OverbookingException.noRoomAvailable(roomId, hotelId);
             }
             toBook.add(rec);
         }
 
-        toBook.forEach(RoomAvailability::addBooking);
+        try {
+            toBook.forEach(RoomAvailability::addBooking);
+        } catch (IllegalStateException e) {
+            throw OverbookingException.noRoomAvailable(roomId, hotelId);
+        }
         availabilityRepository.saveAll(toBook);
+    }
+
+    private RoomAvailability insertOrLockDay(Long roomId, Long hotelId, LocalDate date) {
+        // Re-check under the same TX after the range lock; avoid insert-catch in this
+        // transaction (DataIntegrityViolation marks the TX rollback-only).
+        List<RoomAvailability> again = availabilityRepository
+                .findByRoomIdAndDateRangeWithLock(roomId, date, date);
+        if (!again.isEmpty()) {
+            return again.get(0);
+        }
+        RoomAvailability created = new RoomAvailability();
+        created.setRoomId(roomId);
+        created.setHotelId(hotelId);
+        created.setAvailabilityDate(date);
+        created.setTotalRooms(1);
+        created.setBookedRooms(0);
+        created.setAvailableRooms(1);
+        created.setBlockedRooms(0);
+        try {
+            return availabilityRepository.saveAndFlush(created);
+        } catch (DataIntegrityViolationException dup) {
+            // Concurrent inserter won — require caller retry; do not continue this TX.
+            throw OverbookingException.noRoomAvailable(roomId, hotelId);
+        }
     }
 
     @Override
     @Transactional
     public void cancelBooking(Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
         List<RoomAvailability> availabilities = availabilityRepository
-            .findByRoomIdAndAvailabilityDateBetween(roomId, checkInDate, checkOutDate.minusDays(1));
+            .findByRoomIdAndDateRangeWithLock(roomId, checkInDate, checkOutDate.minusDays(1));
 
         availabilities.forEach(RoomAvailability::removeBooking);
         availabilityRepository.saveAll(availabilities);

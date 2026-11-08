@@ -478,13 +478,13 @@ public class PaymentService {
     @Transactional
     public void processRefundForBookingCancellation(Long bookingId, LocalDate checkInDate) {
         log.info("Evaluating refund for cancelled booking: {}", bookingId);
-        hostLedgerService.markRefundedForBooking(bookingId);
 
         Optional<Payment> paymentOpt = paymentRepository
             .findTopByBookingIdAndPaymentStatusOrderByCompletedAtDesc(bookingId, PaymentStatus.COMPLETED);
 
         if (paymentOpt.isEmpty()) {
             log.info("No completed payment found for booking {} — no refund to issue", bookingId);
+            hostLedgerService.markRefundedForBooking(bookingId);
             return;
         }
 
@@ -492,8 +492,9 @@ public class PaymentService {
         BigDecimal refundAmount = calculateCancellationRefundAmount(payment.getTotalAmount(), checkInDate);
 
         if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            log.info("Cancellation policy yields zero refund for booking {} (check-in: {}) — skipping",
+            log.info("Cancellation policy yields zero refund for booking {} (check-in: {}) — skipping gateway",
                     bookingId, checkInDate);
+            hostLedgerService.markRefundedForBooking(bookingId);
             return;
         }
 
@@ -507,8 +508,9 @@ public class PaymentService {
 
         try {
             processRefund(payment.getUserId(), refundReq);
+            hostLedgerService.markRefundedForBooking(bookingId);
         } catch (Exception e) {
-            // Log for manual follow-up; do not re-throw — cancellation already persisted
+            // Do not mark ledger refunded — guest may still be charged; follow up manually
             log.error("Refund failed for cancelled booking {} (payment {}): {}",
                     bookingId, payment.getId(), e.getMessage(), e);
         }
@@ -627,19 +629,29 @@ public class PaymentService {
 
             if ("payment.captured".equals(eventType)) {
                 paymentRepository.findByRazorpayOrderId(razorpayOrderId).ifPresent(p -> {
-                    if (!PaymentStatus.COMPLETED.equals(p.getPaymentStatus())) {
-                        try {
-                            JSONObject details = razorpayService.getPaymentDetails(razorpayPaymentId);
-                            applyCapturedPayment(p, razorpayPaymentId, details);
-                            paymentRepository.save(p);
-                        } catch (Exception ex) {
-                            log.error("Webhook capture handling failed for payment {}: {}", p.getId(), ex.getMessage());
-                        }
+                    if (PaymentStatus.COMPLETED.equals(p.getPaymentStatus())
+                            || PaymentStatus.REFUNDED.equals(p.getPaymentStatus())
+                            || PaymentStatus.CANCELLED.equals(p.getPaymentStatus())) {
+                        log.info("Ignoring payment.captured for non-open payment {}", p.getId());
+                        return;
                     }
-                    log.info("Payment {} marked COMPLETED via webhook", p.getId());
+                    try {
+                        JSONObject details = razorpayService.getPaymentDetails(razorpayPaymentId);
+                        applyCapturedPayment(p, razorpayPaymentId, details);
+                        paymentRepository.save(p);
+                        log.info("Payment {} marked COMPLETED via webhook", p.getId());
+                    } catch (Exception ex) {
+                        log.error("Webhook capture handling failed for payment {}: {}", p.getId(), ex.getMessage());
+                        throw new IllegalStateException("Webhook capture handling failed", ex);
+                    }
                 });
             } else if ("payment.failed".equals(eventType)) {
                 paymentRepository.findByRazorpayOrderId(razorpayOrderId).ifPresent(p -> {
+                    if (PaymentStatus.COMPLETED.equals(p.getPaymentStatus())
+                            || PaymentStatus.REFUNDED.equals(p.getPaymentStatus())) {
+                        log.warn("Ignoring payment.failed for terminal payment {}", p.getId());
+                        return;
+                    }
                     p.setPaymentStatus(PaymentStatus.FAILED);
                     p.setErrorMessage("Payment failed — " + entity.optString("error_description", "gateway error"));
                     paymentRepository.save(p);
@@ -654,8 +666,11 @@ public class PaymentService {
                 });
                 log.info("Refund processed for order {}", razorpayOrderId);
             }
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error handling Razorpay webhook: {}", e.getMessage(), e);
+            throw new IllegalStateException("Error handling Razorpay webhook", e);
         }
     }
 

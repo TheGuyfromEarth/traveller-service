@@ -170,13 +170,16 @@ public class NotificationService {
     /**
      * Mark notification as read
      */
-    public NotificationDTO markAsRead(Long notificationId) {
+    public NotificationDTO markAsRead(Long notificationId, Long userId, boolean admin) {
         Notification notification = notificationRepository.findById(notificationId)
             .orElseThrow(() -> new NotificationNotFoundException(notificationId));
-        
+        if (!admin && (userId == null || !userId.equals(notification.getUserId()))) {
+            throw new NotificationNotFoundException(notificationId);
+        }
+
         notification.setIsRead(true);
         notification.setReadTime(LocalDateTime.now());
-        
+
         Notification saved = notificationRepository.save(notification);
         return modelMapper.map(saved, NotificationDTO.class);
     }
@@ -184,8 +187,10 @@ public class NotificationService {
     /**
      * Delete notification
      */
-    public void deleteNotification(Long notificationId) {
-        if (!notificationRepository.existsById(notificationId)) {
+    public void deleteNotification(Long notificationId, Long userId, boolean admin) {
+        Notification notification = notificationRepository.findById(notificationId)
+            .orElseThrow(() -> new NotificationNotFoundException(notificationId));
+        if (!admin && (userId == null || !userId.equals(notification.getUserId()))) {
             throw new NotificationNotFoundException(notificationId);
         }
         notificationRepository.deleteById(notificationId);

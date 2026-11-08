@@ -8,6 +8,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -43,6 +44,7 @@ public class UserSecurityConfig {
     }
 
     @Bean
+    @Primary
     public JwtDecoder jwtDecoder(
             @Value("${jwt.secret}") String jwtSecret) {
         SecretKeySpec key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA512");
@@ -61,7 +63,7 @@ public class UserSecurityConfig {
             CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**").disable())
+                .csrf(csrf -> csrf.disable())
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
@@ -73,11 +75,8 @@ public class UserSecurityConfig {
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // Pre-flight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // H2 console (local dev only)
                         .requestMatchers("/h2-console/**").permitAll()
-                        // Auth + public read endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/webhooks/whatsapp", "/api/webhooks/whatsapp/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/webhook/razorpay").permitAll()
@@ -87,16 +86,23 @@ public class UserSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/rooms/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/addons/**").permitAll()
-                        // Admin-only
+                        // Drafts must be authenticated — declare before public /api/listing/** GETs
+                        .requestMatchers("/api/listing/draft", "/api/listing/draft/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/listing/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/offers/credits").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/offers", "/api/offers/validate").permitAll()
+
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        // Any authenticated user can create their first listing (POST /api/hotels exact path).
-                        // HotelServiceImpl.create() promotes the user to HOST role in the DB.
-                        // Sub-resource operations on existing hotels still require HOST or ADMIN.
+                        .requestMatchers(HttpMethod.POST, "/api/hotel-requests/*/approve").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/hotel-requests/*/reject").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/payouts/*/approve").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/payouts/*/process").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/payouts/*/complete").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/payouts/admin/**").hasRole("ADMIN")
+
                         .requestMatchers(HttpMethod.POST, "/api/hotels").authenticated()
-                        // Admin-only hotel operations (must come before the HOST+ADMIN catch-all below)
                         .requestMatchers(HttpMethod.PATCH, "/api/hotels/*/status").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/hotels/*/request-documents").hasRole("ADMIN")
-                        // Host + admin
                         .requestMatchers(HttpMethod.POST, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/hotels/**").hasAnyRole("HOST", "ADMIN")
@@ -112,23 +118,29 @@ public class UserSecurityConfig {
                         .requestMatchers("/api/promotions/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/pricing/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/auto-replies/**").hasAnyRole("HOST", "ADMIN")
-                        // Analytics: host/admin only; inventory: any authenticated user
                         .requestMatchers("/api/analytics/**").hasAnyRole("HOST", "ADMIN")
+                        .requestMatchers("/api/listings/**").hasAnyRole("HOST", "ADMIN")
+                        .requestMatchers("/api/ai/**").hasAnyRole("HOST", "ADMIN")
                         .requestMatchers("/api/inventory/**").authenticated()
-                        // User management mutations — admin only
+
                         .requestMatchers(HttpMethod.PATCH, "/api/users/*/status").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/users/*/role").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/users/*/notify").hasRole("ADMIN")
-                        // Authenticated users (any role)
+                        .requestMatchers(HttpMethod.GET, "/api/users").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/users").hasRole("ADMIN")
                         .requestMatchers("/api/users/me").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/api/bookings/**").authenticated()
                         .requestMatchers("/api/messages/**").authenticated()
+                        .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/wishlists/**").authenticated()
                         .requestMatchers("/api/notifications/**").authenticated()
                         .requestMatchers("/api/payments/**").authenticated()
-                        // Review moderation actions — admin only
+                        .requestMatchers("/api/emergency/**").authenticated()
+                        .requestMatchers("/api/storage/**").authenticated()
+                        .requestMatchers("/api/hotel-requests/**").authenticated()
+
                         .requestMatchers(HttpMethod.POST, "/api/reviews/*/approve").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/reviews/*/reject").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/reviews/*/redact").hasRole("ADMIN")
@@ -136,8 +148,8 @@ public class UserSecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/reviews/*/dismiss").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/reviews/*/assign").hasRole("ADMIN")
                         .requestMatchers("/api/reviews/**").authenticated()
-                        // Everything else public (search, property detail, etc.)
-                        .anyRequest().permitAll()
+
+                        .anyRequest().authenticated()
                 );
 
         return http.build();

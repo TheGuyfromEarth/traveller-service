@@ -299,24 +299,21 @@ class BookingServiceTest {
     class UpdateBooking {
 
         @Test
-        @DisplayName("TC-BK-12 Status change to CANCELLED: releases availability")
-        void updateToCancelledReleasesRooms() {
+        @DisplayName("TC-BK-12 cancelBooking(): releases availability")
+        void cancelBookingReleasesRooms() {
             Booking existing = savedVersion(buildBooking("Karl Yellow", CHECK_IN, CHECK_OUT), 30L);
             existing.setStatus(Booking.BookingStatus.CONFIRMED);
             when(bookingRepository.findById(30L)).thenReturn(Optional.of(existing));
             when(bookingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            Booking patch = buildBooking("Karl Yellow", CHECK_IN, CHECK_OUT);
-            patch.setStatus(Booking.BookingStatus.CANCELLED);
-
-            bookingService.update(30L, patch);
+            bookingService.cancelBooking(30L);
 
             verify(availabilityService).cancelBooking(ROOM_ID, CHECK_IN, CHECK_OUT);
         }
 
         @Test
-        @DisplayName("TC-BK-13 Status change to CONFIRMED: does NOT release availability")
-        void updateToConfirmedDoesNotReleaseRooms() {
+        @DisplayName("TC-BK-13 update() ignores status in body (no confirm/cancel via PUT)")
+        void updateIgnoresStatusInBody() {
             Booking existing = savedVersion(buildBooking("Lena Cyan", CHECK_IN, CHECK_OUT), 31L);
             existing.setStatus(Booking.BookingStatus.PENDING);
             when(bookingRepository.findById(31L)).thenReturn(Optional.of(existing));
@@ -324,9 +321,12 @@ class BookingServiceTest {
 
             Booking patch = buildBooking("Lena Cyan", CHECK_IN, CHECK_OUT);
             patch.setStatus(Booking.BookingStatus.CONFIRMED);
+            patch.setGuestName("Lena Updated");
 
-            bookingService.update(31L, patch);
+            Booking saved = bookingService.update(31L, patch).orElseThrow();
 
+            assertEquals(Booking.BookingStatus.PENDING, saved.getStatus());
+            assertEquals("Lena Updated", saved.getGuestName());
             verify(availabilityService, never()).cancelBooking(any(), any(), any());
         }
 

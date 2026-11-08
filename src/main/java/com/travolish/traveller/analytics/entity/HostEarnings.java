@@ -16,6 +16,8 @@ import java.time.LocalDateTime;
     @Index(name = "idx_earnings_booking_id", columnList = "booking_id"),
     @Index(name = "idx_earnings_date", columnList = "earned_date"),
     @Index(name = "idx_earnings_status", columnList = "status")
+}, uniqueConstraints = {
+    @UniqueConstraint(name = "uk_host_earnings_payment_id", columnNames = {"payment_id"})
 })
 @Data
 @NoArgsConstructor

@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.travolish.traveller.inventory.dto.AvailabilityCheckDTO;
@@ -98,10 +99,11 @@ public class AvailabilityController {
     }
 
     /**
-     * Book room (reduce available count)
+     * Book room (reduce available count) — admin/ops only; guests must use /api/bookings.
      */
     @PostMapping("/{roomId}/book")
     @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasRole('ADMIN')")
     public void bookRoom(
         @PathVariable Long roomId,
         @RequestParam Long hotelId,
@@ -112,10 +114,11 @@ public class AvailabilityController {
     }
 
     /**
-     * Cancel booking (increase available count)
+     * Cancel booking inventory hold — admin/ops only.
      */
     @PostMapping("/{roomId}/cancel")
     @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasRole('ADMIN')")
     public void cancelBooking(
         @PathVariable Long roomId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkInDate,

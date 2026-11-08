@@ -53,6 +53,9 @@ public interface BookingService {
      */
     boolean cancelBooking(Long bookingId);
 
+    /** Confirm a PENDING booking (host/admin or post-payment). */
+    Optional<Booking> confirmBooking(Long bookingId);
+
     /**
      * Get all bookings for a specific guest email
      */

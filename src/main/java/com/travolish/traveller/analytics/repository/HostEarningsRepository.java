@@ -3,7 +3,9 @@ package com.travolish.traveller.analytics.repository;
 import com.travolish.traveller.analytics.entity.HostEarnings;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -74,6 +76,7 @@ public interface HostEarningsRepository extends JpaRepository<HostEarnings, Long
     @Query("SELECT he FROM HostEarnings he WHERE he.status = 'PENDING_RELEASE' AND he.checkOutDate < :today")
     List<HostEarnings> findPendingReleaseBeforeCheckOut(@Param("today") LocalDate today);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT he FROM HostEarnings he WHERE he.hostId = :hostId AND he.status = 'EARNED' ORDER BY he.checkOutDate ASC, he.id ASC")
     List<HostEarnings> findEarnedFifo(@Param("hostId") Long hostId);
 }

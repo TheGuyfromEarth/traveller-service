@@ -3,11 +3,13 @@ package com.travolish.traveller.inventory.controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import com.travolish.traveller.inventory.dto.OfferDTO;
 import com.travolish.traveller.inventory.dto.TravelCreditsDTO;
 import com.travolish.traveller.inventory.service.OffersService;
+import com.travolish.traveller.user.security.AuthSupport;
 
 import lombok.RequiredArgsConstructor;
 
@@ -45,7 +47,12 @@ public class OffersController {
      * GET /api/offers/credits?userId=17
      */
     @GetMapping("/credits")
-    public ResponseEntity<TravelCreditsDTO> getUserCredits(@RequestParam Long userId) {
-        return ResponseEntity.ok(offersService.getUserCredits(userId));
+    public ResponseEntity<TravelCreditsDTO> getUserCredits(
+            @RequestParam(required = false) Long userId,
+            Authentication authentication) {
+        Long authUserId = AuthSupport.requireUserId(authentication);
+        Long target = userId != null ? userId : authUserId;
+        AuthSupport.requireSelfOrAdmin(authentication, target);
+        return ResponseEntity.ok(offersService.getUserCredits(target));
     }
 }

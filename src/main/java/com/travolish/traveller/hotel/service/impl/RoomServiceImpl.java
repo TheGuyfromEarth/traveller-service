@@ -3,6 +3,7 @@ package com.travolish.traveller.hotel.service.impl;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 import com.travolish.traveller.hotel.model.Room;
@@ -34,12 +35,14 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Room create(Room room) {
         room.setId(null);
         return roomRepository.save(room);
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public Optional<Room> update(Long id, Room room) {
         return roomRepository.findById(id).map(existing -> {
             existing.setNumber(room.getNumber());
@@ -52,6 +55,7 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @CacheEvict(value = "hotel-search", allEntries = true)
     public void delete(Long id) {
         roomRepository.deleteById(id);
     }
